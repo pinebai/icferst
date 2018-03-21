@@ -13,24 +13,24 @@ tolerance2 = 1e-4
 toleranceMass = 2e-5
 
 path = os.getcwd()
-binpath = path[:path.index('legacy_reservoir_prototype')] + 'bin/multiphase_prototype'
+binpath = path[:path.index('legacy_reservoir_prototype')] + 'bin/icferst'
 os.system('rm -f ' + path+ '/*.vtu')
-os.system('rm -f ' + path+ '/outfluxes.csv')
+os.system('rm -f ' + path+ '/QuickTest_DG_outfluxes.csv')
 os.system(binpath + ' ' + path + '/*mpml')
 
-with open('outfluxes.csv','r') as f1:
+with open('QuickTest_DG_outfluxes.csv','r') as f1:
 # Need a slightly modified script to correctly read this file in       
     f1.readline()
     for row in f1:
         columns = row.split(",")
         try:
-            tC.append(float(columns[1]))
-            f1C.append(float(columns[2]))
-            f2C.append(float(columns[3]))
-            t1C.append(float(columns[4]))
-            t2C.append(float(columns[5]))        
+           tC.append(float(columns[0]))
+           f1C.append(float(columns[3]))
+           f2C.append(float(columns[4]))
+           t1C.append(float(columns[5]))
+           t2C.append(float(columns[6]))        
         except:
-            print "some error"
+           print "some error1"
 
 f1.close()
 
@@ -39,13 +39,13 @@ with open('outfluxes_Control.csv','r') as f2:
     for row in f2:
         columns = row.split(",")
         try:
-            tCA.append(float(columns[1]))
-            f1CA.append(float(columns[2]))
-            f2CA.append(float(columns[3]))
-            t1CA.append(float(columns[4]))
-            t2CA.append(float(columns[5]))        
+            tCA.append(float(columns[0]))
+            f1CA.append(float(columns[3]))
+            f2CA.append(float(columns[4]))
+            t1CA.append(float(columns[5]))
+            t2CA.append(float(columns[6]))        
         except:
-            print "some error"
+            print "some error2"
 
 f2.close()
 

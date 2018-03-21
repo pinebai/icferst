@@ -169,17 +169,31 @@ module global_parameters
   integer, parameter :: COLOURING_DG2 = 4
   integer, parameter :: NUM_COLOURINGS = 4
 
-  !! Multiphase prototype
+  !! Multiphase prototype, reservoir simulator
   logical :: is_porous_media = .false.
+  !! Multiphase prototype, flooding simulator
+  logical :: is_flooding = .false.
+  !! Multiphase prototype, magma simulator
+  logical :: is_magma = .false.
 
   !! Checking multifracture
   logical :: is_multifracture = .false.
+  !! Multiphase prototype, models temperature
+  logical :: has_temperature = .false.
+  !! Checking if using the P0DG for velocity,
+  !! special because we need to avoid the use of PressureMesh_Continuous
+  logical :: is_P0DGP1CV = .false.
 
   !!Public variable to be used in Adaptive_NonLinear to re-scale the effective convergence
   real :: backtrack_or_convergence
   logical :: FPI_have_converged = .false.
   logical :: after_adapt = .false.
   logical :: first_time_step = .false.
+  logical :: first_nonlinear_time_step = .false.
+  logical :: solver_not_converged = .false.
+
+  !!Public string containing a generic warning and tips to get the code working
+  character(len=OPTION_PATH_LEN) :: multi_generic_warning =""
 
 contains
 

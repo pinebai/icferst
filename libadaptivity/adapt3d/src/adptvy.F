@@ -83,7 +83,8 @@ C
      :        NWNNOD, NWNELM, NWNSEL, NWSZEN, NWSZSN, NWSZNN, SZSNLS,
      :        NWENLB, NWENLS, NWSNLB, NWSNLS, NWSFID, NWELRG, NWSROW,
      :        NWNDLC, NWNODX, NWNODY, NWNODZ, NEWFLD, NEWMTX,
-     :        NGATH, NHALO, NPROC, PNOD, NSWEEP, NPRDND, debug_level
+     :        NGATH, NHALO, NPROC, PNOD, NSWEEP, NPRDND, debug_level,
+     :        adapt_error
 C
       INTEGER INTARR(INTSIZ), ENLBAS(NELM+1), ENLIST(SZENLS),
      :        SNLIST(SZSNLS), SNLBAS(NSELM+1), SURFID(NSELM),
@@ -501,9 +502,16 @@ C
      :             SZENLS, SZNELS, GEOM3D, SRFGMY,
      :             PNOD, NHALO, SCATER, NGATH, GATHER )
 C
+c      if (adapt_error < 0) then
+C               If there is an error we pass it back reusing nsweep,
+C               otherwise adding new variable seems tricky
+c                NSWEEP = -1; return
+c      end if
       IF( IERR .NE. 0 ) THEN
          WRITE(0,'(a)') '*** ADPTVY: GOT ERROR FROM MKADPT'
          NWNNOD = -1
+         nsweep = -1
+c        Sending error to global (all cpu) error check in Adapt_Integration
          GOTO 999
       END IF
 C
@@ -642,7 +650,14 @@ C
      :                   NODX,   NODY,   NODZ,   ORGMTX,
      :                   EDSPLT, MSHOPT(2), MSHOPT(3), MSHOPT(4),
      :                   ELSPLT, TOGTHR .AND. MSHOPT(6),
-     :                   FLCHK3, FLCHK1, ALWAYS, DOTOP, MINCHG, CHANG1 )
+     :                   FLCHK3, FLCHK1, ALWAYS, DOTOP, MINCHG, CHANG1,
+     :                   adapt_error )
+            
+            if (adapt_error < 0) then
+C               If there is an error we pass it back reusing nsweep
+C               otherwise, adding new variable seems tricky
+                NSWEEP = -1; GOTO 999
+            end if
             IF( I .LT. NSWPS/2 ) MINCHG = -MINCHG
 C
             IF( IERR .NE. 0 ) THEN
@@ -668,6 +683,7 @@ C
 C - an adaptive sweep with only node movement
 C
             IF( I .LT. NSWPS/2 ) MINCHG = -MINCHG
+            
             CALL ADAPT1( INTARR(BIGLST), RLARR(NODLST),
      :                   ENLBAS, ENLIST,
      :                   INTARR(NELBAS), INTARR(NELIST), INTARR(EELIST),
@@ -675,7 +691,14 @@ C
      :                   NODX,   NODY,   NODZ,   ORGMTX,
      :                   .FALSE., .FALSE., .FALSE., .FALSE., .FALSE.,
      :                   .TRUE.,
-     :                   FLCHK5, FLCHK2, ALWAYS, DOTOP, MINCHG, CHANG2 )
+     :                   FLCHK5, FLCHK2, ALWAYS, DOTOP, MINCHG, CHANG2,
+     :                   adapt_error )
+            
+            if (adapt_error < 0) then
+C               If there is an error we pass it back reusing nsweep
+C               otherwise, adding new variable seems tricky
+                NSWEEP = -1; GOTO 999
+            end if
             IF( I .LT. NSWPS/2 ) MINCHG = -MINCHG
 C
             IF( IERR .NE. 0 ) THEN
@@ -720,6 +743,7 @@ C - an adaptive sweep with no node movement (element division is also
 C - inactive at the moment)
 C
             IF( I .LT. NSWPS/2 ) MINCHG = -MINCHG
+            
             CALL ADAPT1( INTARR(BIGLST), RLARR(NODLST),
      :                   ENLBAS, ENLIST,
      :                   INTARR(NELBAS), INTARR(NELIST), INTARR(EELIST),
@@ -727,7 +751,14 @@ C
      :                   NODX,   NODY,   NODZ,   ORGMTX,
      :                   EDSPLT, MSHOPT(2), MSHOPT(3), MSHOPT(4),
      :                   ELSPLT, TOGTHR .AND. MSHOPT(6),
-     :                   FLCHK4, FLCHK3, ALWAYS, DOTOP, MINCHG, CHANG1 )
+     :                   FLCHK4, FLCHK3, ALWAYS, DOTOP, MINCHG, CHANG1,
+     :                   adapt_error )
+            
+            if (adapt_error < 0) then
+C               If there is an error we pass it back reusing nsweep
+C               otherwise, adding new variable seems tricky
+                NSWEEP = -1; GOTO 999
+            end if
             IF( I .LT. NSWPS/2 ) MINCHG = -MINCHG
 C
             IF( IERR .NE. 0 ) THEN
@@ -758,7 +789,13 @@ C
      :                   NODX,   NODY,   NODZ,   ORGMTX,
      :                   .FALSE., .FALSE., .FALSE., .FALSE., .FALSE.,
      :                   .TRUE.,
-     :                   FLCHK6, FLCHK5, ALWAYS, DOTOP, MINCHG, CHANG2 )
+     :                   FLCHK6, FLCHK5, ALWAYS, DOTOP, MINCHG, CHANG2,
+     :                   adapt_error )
+            if (adapt_error < 0) then
+C               If there is an error we pass it back reusing nsweep,
+C               otherwise adding new variable seems tricky
+                NSWEEP = -1; GOTO 999
+            end if
             IF( I .LT. NSWPS/2 ) MINCHG = -MINCHG
 C
             IF( IERR .NE. 0 ) THEN
@@ -834,6 +871,7 @@ C - number of moments.
 C - OLDFLD has length TOTM*NNOD and NEWFLD should have length TOTM*NEWNND.
 C - INTFLD can be called as many times as necessary for appropriate fields.
 C
+
       ewrite(1,'(a)') 
      :     '--- ADPTVY: Interpolating fields...'
 c      pause
@@ -988,7 +1026,7 @@ c
       end if
 
 C     Finalize AdaptProgress module
-      call finalize(NWNNOD)
+c      call finalize(NWNNOD)
 
       ewrite(1,'(a)') 
      :     '--- ADPTVY: Finished successfully'
@@ -996,7 +1034,11 @@ c
   999 IF( IERR .NE. 0 ) THEN
          write(0,'(a,i7)') '*** ADPTVY: FINISHED WITH ERROR',IERR
       END IF
-C
+      nsweep = min( NWNNOD, nsweep, IERR)
+C      NWNNOD = abs(NWNNOD)
+C     Finalize AdaptProgress module
+      call finalize(NWNNOD)
+      
       RETURN
       END
 C

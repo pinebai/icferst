@@ -3,6 +3,9 @@
   <simulation_name>
     <string_value lines="1">QuickTest_DG</string_value>
   </simulation_name>
+  <simulation_type>
+    <porous_media/>
+  </simulation_type>
   <geometry>
     <dimension>
       <integer_value rank="0">2</integer_value>
@@ -20,12 +23,11 @@
         <mesh name="CoordinateMesh"/>
         <mesh_shape>
           <polynomial_degree>
-            <integer_value rank="0">2</integer_value>
+            <integer_value rank="0">1</integer_value>
           </polynomial_degree>
           <element_type>
             <string_value>lagrangian</string_value>
           </element_type>
-          <Porous_media/>
         </mesh_shape>
         <mesh_continuity>
           <string_value>discontinuous</string_value>
@@ -40,44 +42,6 @@
         <mesh name="CoordinateMesh"/>
         <mesh_shape>
           <polynomial_degree>
-            <integer_value rank="0">1</integer_value>
-          </polynomial_degree>
-          <element_type>
-            <string_value>lagrangian</string_value>
-          </element_type>
-        </mesh_shape>
-        <mesh_continuity>
-          <string_value>discontinuous</string_value>
-        </mesh_continuity>
-        <stat>
-          <exclude_from_stat/>
-        </stat>
-      </from_mesh>
-    </mesh>
-    <mesh name="P0DG">
-      <from_mesh>
-        <mesh name="CoordinateMesh"/>
-        <mesh_shape>
-          <polynomial_degree>
-            <integer_value rank="0">0</integer_value>
-          </polynomial_degree>
-          <element_type>
-            <string_value>lagrangian</string_value>
-          </element_type>
-        </mesh_shape>
-        <mesh_continuity>
-          <string_value>discontinuous</string_value>
-        </mesh_continuity>
-        <stat>
-          <exclude_from_stat/>
-        </stat>
-      </from_mesh>
-    </mesh>
-    <mesh name="VelocityMesh_Continuous">
-      <from_mesh>
-        <mesh name="CoordinateMesh"/>
-        <mesh_shape>
-          <polynomial_degree>
             <integer_value rank="0">2</integer_value>
           </polynomial_degree>
           <element_type>
@@ -86,44 +50,6 @@
         </mesh_shape>
         <mesh_continuity>
           <string_value>continuous</string_value>
-        </mesh_continuity>
-        <stat>
-          <exclude_from_stat/>
-        </stat>
-      </from_mesh>
-    </mesh>
-    <mesh name="PressureMesh_Continuous">
-      <from_mesh>
-        <mesh name="CoordinateMesh"/>
-        <mesh_shape>
-          <polynomial_degree>
-            <integer_value rank="0">1</integer_value>
-          </polynomial_degree>
-          <element_type>
-            <string_value>lagrangian</string_value>
-          </element_type>
-        </mesh_shape>
-        <mesh_continuity>
-          <string_value>continuous</string_value>
-        </mesh_continuity>
-        <stat>
-          <exclude_from_stat/>
-        </stat>
-      </from_mesh>
-    </mesh>
-    <mesh name="PressureMesh_Discontinuous">
-      <from_mesh>
-        <mesh name="CoordinateMesh"/>
-        <mesh_shape>
-          <polynomial_degree>
-            <integer_value rank="0">1</integer_value>
-          </polynomial_degree>
-          <element_type>
-            <string_value>lagrangian</string_value>
-          </element_type>
-        </mesh_shape>
-        <mesh_continuity>
-          <string_value>discontinuous</string_value>
         </mesh_continuity>
         <stat>
           <exclude_from_stat/>
@@ -156,18 +82,21 @@
       <real_value rank="0">1e-2</real_value>
     </timestep>
     <finish_time>
-      <real_value rank="0">0.2</real_value>
+      <real_value rank="0">0.20</real_value>
     </finish_time>
     <nonlinear_iterations>
-      <integer_value rank="0">30</integer_value>
+      <integer_value rank="0">15</integer_value>
       <Fixed_Point_Iteration>
-        <real_value rank="0">2e-2</real_value>
+        <real_value rank="0">1e-2</real_value>
+        <Infinite_norm_tol>
+          <real_value rank="0">0.01</real_value>
+        </Infinite_norm_tol>
         <Backtracking_factor>
-          <real_value rank="0">-0.5</real_value>
+          <real_value rank="0">-10</real_value>
         </Backtracking_factor>
-        <Acceleration_exp>
-          <real_value rank="0">0.5</real_value>
-        </Acceleration_exp>
+        <Vanishing_relaxation>
+          <real_value rank="0">-1e2</real_value>
+        </Vanishing_relaxation>
       </Fixed_Point_Iteration>
     </nonlinear_iterations>
   </timestepping>
@@ -211,6 +140,7 @@
         <spatial_discretisation>
           <continuous_galerkin/>
         </spatial_discretisation>
+        <CV_P_matrix/>
         <solver>
           <iterative_method name="gmres">
             <restart>

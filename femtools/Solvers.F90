@@ -408,7 +408,7 @@ subroutine petsc_solve_vector_components(x, matrix, rhs, option_path)
 end subroutine petsc_solve_vector_components
 
 subroutine petsc_solve_scalar_petsc_csr(x, matrix, rhs, option_path, &
-  prolongators, surface_node_list)
+  prolongators, surface_node_list, iterations_taken)
   !!< Solve a linear system the nice way. Options for this
   !!< come via the options mechanism. 
   type(scalar_field), intent(inout) :: x
@@ -419,6 +419,8 @@ subroutine petsc_solve_scalar_petsc_csr(x, matrix, rhs, option_path, &
   type(petsc_csr_matrix), dimension(:), optional, intent(in) :: prolongators
   !! surface_node_list for internal smoothing
   integer, dimension(:), optional, intent(in) :: surface_node_list
+  !! the number of petsc iterations taken
+  integer, intent(out), optional :: iterations_taken
 
   KSP ksp
   Vec y, b
@@ -447,6 +449,9 @@ subroutine petsc_solve_scalar_petsc_csr(x, matrix, rhs, option_path, &
   call petsc_solve_core(y, matrix%M, b, ksp, matrix%row_numbering, &
           solver_option_path, lstartfromzero, literations, &
           sfield=x, x0=x%val)
+  ! set the optional variable passed out of this procedure
+  ! for the number of petsc iterations taken
+  if (present(iterations_taken)) iterations_taken = literations
         
   ! Copy back the result using the petsc numbering:
   call petsc2field(y, matrix%column_numbering, x)
@@ -457,7 +462,7 @@ subroutine petsc_solve_scalar_petsc_csr(x, matrix, rhs, option_path, &
 end subroutine petsc_solve_scalar_petsc_csr
 
 subroutine petsc_solve_vector_petsc_csr(x, matrix, rhs, option_path, &
-  prolongators, positions, rotation_matrix)
+  prolongators, positions, rotation_matrix, iterations_taken)
   !!< Solve a linear system the nice way. Options for this
   !!< come via the options mechanism. 
   type(vector_field), intent(inout) :: x
@@ -470,6 +475,8 @@ subroutine petsc_solve_vector_petsc_csr(x, matrix, rhs, option_path, &
   type(vector_field), intent(in), optional :: positions
   !! with rotated bcs: matrix to transform from x,y,z aligned vectors to boundary aligned
   Mat, intent(in), optional:: rotation_matrix
+  !! the number of petsc iterations taken
+  integer, intent(out), optional :: iterations_taken
 
   KSP ksp
   Vec y, b
@@ -499,7 +506,10 @@ subroutine petsc_solve_vector_petsc_csr(x, matrix, rhs, option_path, &
   call petsc_solve_core(y, matrix%M, b, ksp, matrix%row_numbering, &
           solver_option_path, lstartfromzero, literations, &
           vfield=x, vector_x0=x)
-        
+  ! set the optional variable passed out of this procedure
+  ! for the number of petsc iterations taken
+  if (present(iterations_taken)) iterations_taken = literations
+
   ! Copy back the result using the petsc numbering:
   call petsc2field(y, matrix%column_numbering, x)
   
@@ -1466,7 +1476,22 @@ subroutine ConvergenceCheck(reason, iterations, name, solver_option_path, &
   reasons(8)  = "KSP_DIVERGED_INDEFINITE_PC"
   reasons(9)  = "KSP_DIVERGED_NAN"
   reasons(10) = "KSP_DIVERGED_INDEFINITE_MAT"
-  
+
+  if (have_option(trim(solver_option_path)//'/ignore_all_solver_failures') &
+    .and. have_option('/timestepping/nonlinear_iterations/Fixed_Point_Iteration') .and. reason == -3) then
+        !allow the linear solvers to not achieve convergence without complaining if we are in the non-linear solver
+        ! write reason+iterations to only if debugging verbosity is at least 1
+         ewrite(1,*) 'WARNING: Failed to converge.'
+         ewrite(1,*) "PETSc did not converge for matrix solve of: " // trim(name)
+         if((reason>=-10) .and. (reason<=-1)) then
+            ewrite(1,*) 'Reason for non-convergence: ', reasons(-reason)
+         else
+            ewrite(1,*) 'Reason for non-convergence is undefined: ', reason
+         endif
+         ewrite(1,*) 'Number of iterations: ', iterations
+        return
+  end if
+
   if (reason<=0) then
      if(present_and_true(nomatrixdump)) matrixdumped = .true.    
      if (present(checkconvergence)) then
@@ -1646,8 +1671,8 @@ subroutine SetupKSP(ksp, mat, pmat, solver_option_path, parallel, &
 #endif
     KSPType ksptype
     PC pc
-    PetscReal rtol, atol, dtol
-    PetscInt max_its
+    PetscReal rtol, atol, dtol, rnorm
+    PetscInt max_its, iteration
     PetscErrorCode ierr
     
     logical startfromzero, remove_null_space
@@ -1704,7 +1729,6 @@ subroutine SetupKSP(ksp, mat, pmat, solver_option_path, parallel, &
       startfromzero=.false.
     end if
 
-
     ! Inquire about settings as they may have changed by PETSc options:
     call KSPGetTolerances(ksp, rtol, atol, dtol, max_its, ierr)
     
@@ -1732,7 +1756,12 @@ subroutine SetupKSP(ksp, mat, pmat, solver_option_path, parallel, &
         FLExit("Solver option diagnostics/monitors/preconditioned_residual_graph not supported with petsc version >=3.4")
 #endif
     end if
-
+    !Calculate the approximation of the conditioning number
+    if (have_option(trim(solver_option_path)// &
+       '/diagnostics/monitors/singular_values')) then
+        call KSPMonitorSet(ksp,KSPMonitorSingularValue,PETSC_NULL_OBJECT,PETSC_NULL_FUNCTION,ierr)
+        call KSPSetComputeSingularValues(ksp,PETSC_TRUE,ierr)
+    end if
     if (have_option(trim(solver_option_path)// &
        '/diagnostics/monitors/true_error') &
        .and. .not. petsc_monitor_has_exact) then
@@ -1913,7 +1942,7 @@ subroutine SetupKSP(ksp, mat, pmat, solver_option_path, parallel, &
     PCType:: pctype, hypretype
     MatSolverPackage:: matsolverpackage
     PetscErrorCode:: ierr
-    
+
     call get_option(trim(option_path)//'/name', pctype)
 
     if (pctype==PCMG) then
@@ -2032,7 +2061,7 @@ subroutine SetupKSP(ksp, mat, pmat, solver_option_path, parallel, &
       if (pctype==PCGAMG) then
         ! we think this is a more useful default - the default value of 0.0
         ! causes spurious "unsymmetric" failures as well
-        call get_option(trim(option_path)//'/GAMG_threshold', GAMGThreshold, default =-0.1)
+        call get_option(trim(option_path)//'/GAMG_threshold', GAMGThreshold, default = 0.1)
 
         call PCGAMGSetThreshold(pc, abs(GAMGThreshold), ierr)
 

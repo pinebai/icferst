@@ -37,72 +37,60 @@ module Compositional_Terms
     use Copy_Outof_State
     use multi_data_types
     use futils, only: int2str
-
     implicit none
 
 contains
 
-    subroutine Calculate_ComponentAbsorptionTerm( state, packed_state, &
-        icomp, cv_ndgln, Mdims, &
-        denold, volfra_pore, mass_ele, &
-        comp_absorb, IDs_ndgln )
+    subroutine Calculate_ComponentAbsorptionTerm( packed_state, icomp, cv_ndgln, &
+                                                  Mdims, denold, volfra_pore, mass_ele, comp_absorb )
 
         !!$ Calculate compositional model linkage between the phase expressed in COMP_ABSORB.
         !!$ Use values from the previous time step so its easier to converge.
         !!$ ALPHA_BETA is the scaling coeff. of the compositional model e.g. =1.0
 
         implicit none
-        type( state_type ), dimension( : ), intent( in ) :: state
         type( state_type ), intent( inout ) :: packed_state
         type(multi_dimensions), intent( in ) :: Mdims
         integer, intent( in ) :: icomp
-        integer, dimension( : ), intent( in ) :: cv_ndgln, IDs_ndgln
+        integer, dimension( : ), intent( in ) :: cv_ndgln
         real, dimension( : ), intent( in ) :: mass_ele
-        real, dimension( :, : ), intent( in ) :: volfra_pore
         real, dimension( :, :, : ), intent( in ) :: denold
+        real, dimension( :, : ), intent( in ) :: volfra_pore
         real, dimension( :, :, : ), intent( inout ) :: comp_absorb
 
         ! Local Variables
-        integer :: nphase, nstate, ncomp, totele, ndim, stotel, &
-            u_nloc, xu_nloc, cv_nloc, x_nloc, x_nloc_p1, p_nloc, mat_nloc, &
-            x_snloc, cv_snloc, u_snloc, p_snloc, cv_nonods, mat_nonods, u_nonods, &
-            xu_nonods, x_nonods, x_nonods_p1, p_nonods, &
-            istate, iphase, jphase, ele, cv_iloc, cv_nod, jcomp
-        real :: dt, alpha_beta, max_k, min_k
+        integer :: &
+            iphase, jphase, ele, cv_iloc, cv_nod, jcomp
+        real :: dt, alpha_beta, max_k, min_k, alpha
         character( len = option_path_len ) :: option_path
         logical :: KComp_Sigmoid
-        real, dimension( : ), allocatable :: alpha, sum_nod, volfra_pore_nod
+        real, dimension( : ), allocatable :: sum_nod, volfra_pore_nod
         real, dimension( :, :, : ), allocatable :: k_comp
         real, dimension( :, :, :, : ), allocatable :: k_comp2
         !working pointers
         type(tensor_field), pointer :: tfield
         real, dimension(:,:), pointer :: satura
+        !Initialize comp_absorb
+        comp_absorb = 0.0
 
-        if ( Mdims%nphase < 2 ) then
-           comp_absorb = 0.0
-           return
-        end if
+        if ( Mdims%nphase < 2 ) return
 
         tfield=>extract_tensor_field(packed_state,"PackedPhaseVolumeFraction")
         satura => tfield%val(1,:,:)
 
-        call Get_Primary_Scalars( state, &
-            nphase, nstate, ncomp, totele, ndim, stotel, &
-            u_nloc, xu_nloc, cv_nloc, x_nloc, x_nloc_p1, p_nloc, mat_nloc, &
-            x_snloc, cv_snloc, u_snloc, p_snloc, &
-            cv_nonods, mat_nonods, u_nonods, xu_nonods, x_nonods, x_nonods_p1, p_nonods )
+        allocate( sum_nod( Mdims%cv_nonods ), volfra_pore_nod( Mdims%cv_nonods ), &
+            k_comp( Mdims%ncomp, Mdims%nphase, Mdims%nphase ), k_comp2( Mdims%ncomp, Mdims%cv_nonods, Mdims%nphase, Mdims%nphase ) )
+        k_comp = 0.0 ; k_comp2 = 0.0
 
-        allocate( alpha( cv_nonods ), sum_nod( cv_nonods ), volfra_pore_nod( cv_nonods ), &
-            k_comp( ncomp, nphase, nphase ), k_comp2( ncomp, cv_nonods, nphase, nphase ) )
-        alpha = 0. ; sum_nod = 0. ; volfra_pore_nod = 0. ; k_comp = 0. ; k_comp2 = 0.
-
-        option_path = 'material_phase[' // int2str( nstate - ncomp ) // &
+        option_path = 'material_phase[' // int2str( Mdims%nstate - Mdims%ncomp ) // &
             ']/is_multiphase_component'
         call get_option( trim( option_path ) // '/alpha_beta', alpha_beta, default = 1. )
+
+
         KComp_Sigmoid = have_option( trim( option_path ) // '/KComp_Sigmoid' )
         if( KComp_Sigmoid ) then
-            do jcomp = 1, ncomp
-                call get_option( 'material_phase[' // int2str( nphase + jcomp - 1 ) // &
+            do jcomp = 1, Mdims%ncomp
+                call get_option( 'material_phase[' // int2str( Mdims%nphase + jcomp - 1 ) // &
                     ']/is_multiphase_component/KComp_Sigmoid/K_Comp', k_comp( jcomp, 1, 1 ) )
                 k_comp( jcomp, :, : ) = k_comp( jcomp, 1, 1 )
             end do
@@ -110,11 +98,10 @@ contains
         call get_option( '/timestepping/timestep', dt )
 
         !!$ Determine a node-wise representation of porosity VOLFRA_PORE_NOD.
-        SUM_NOD = 0.0
-        VOLFRA_PORE_NOD = 0.0
-        DO ELE = 1, TOTELE
-            DO CV_ILOC = 1, CV_NLOC
-                CV_NOD = CV_NDGLN( ( ELE - 1 ) * CV_NLOC + CV_ILOC )
+        SUM_NOD = 0.0 ; VOLFRA_PORE_NOD = 0.0
+        DO ELE = 1, Mdims%totele
+            DO CV_ILOC = 1, Mdims%cv_nloc
+                CV_NOD = CV_NDGLN( ( ELE - 1 ) * Mdims%cv_nloc + CV_ILOC )
                 SUM_NOD( CV_NOD ) = SUM_NOD( CV_NOD ) + mass_ele( ele )
                 VOLFRA_PORE_NOD( CV_NOD ) = VOLFRA_PORE_NOD( CV_NOD ) + &
                     VOLFRA_PORE( 1, ELE ) * mass_ele( ele )
@@ -122,42 +109,38 @@ contains
         END DO
         VOLFRA_PORE_NOD = VOLFRA_PORE_NOD / SUM_NOD
 
-        COMP_ABSORB = 0.0
         MIN_K = max( 1.e-1, MINVAL( K_COMP( ICOMP, : , : )))
         MAX_K = MAXVAL( K_COMP( ICOMP, : , : ) )
-        CALL Calc_KComp2( cv_nonods, nphase, ncomp, icomp, KComp_Sigmoid, &
+        CALL Calc_KComp2( Mdims%cv_nonods, Mdims%nphase, icomp, KComp_Sigmoid, &
             min( 1., max( 0., satura )), K_Comp, max_k, min_k, &
             K_Comp2 )
 
-        DO CV_NOD = 1, CV_NONODS
-            DO IPHASE = 1, NPHASE
-                DO JPHASE = IPHASE + 1, NPHASE, 1
 
-                    ALPHA( CV_NOD ) = ALPHA_BETA * VOLFRA_PORE_NOD( CV_NOD ) * &
-
+        DO CV_NOD = 1, Mdims%cv_nonods
+            DO IPHASE = 1, Mdims%nphase
+                DO JPHASE = IPHASE + 1, Mdims%nphase
+                    ALPHA= ALPHA_BETA * VOLFRA_PORE_NOD( CV_NOD ) * &
                         ( max( 0.0, SATURA( IPHASE, CV_NOD ) * &
                         DENOLD( 1, IPHASE, CV_NOD ) ) / &
                         K_COMP2( ICOMP, CV_NOD, IPHASE, JPHASE ) + &
                         max( 0.0, SATURA( JPHASE,CV_NOD ) * &
                         DENOLD( 1, JPHASE, CV_NOD ) ) ) / DT
-
                     COMP_ABSORB( IPHASE, IPHASE, CV_NOD ) = &
                         COMP_ABSORB( IPHASE, IPHASE, CV_NOD ) + &
-                        ALPHA( CV_NOD ) * &
+                        ALPHA* &
                         K_COMP2( ICOMP, CV_NOD, IPHASE, JPHASE )
 
                     COMP_ABSORB( IPHASE, JPHASE, CV_NOD ) = &
-                        - ALPHA( CV_NOD )
-
+                        - ALPHA
                 END DO
             END DO
         END DO
 
-        DO CV_NOD = 1, CV_NONODS
-            DO IPHASE = 1, NPHASE
+        DO CV_NOD = 1, Mdims%cv_nonods
+            DO IPHASE = 1, Mdims%nphase
                 DO JPHASE = 1, IPHASE - 1
 
-                    ALPHA( CV_NOD ) = ALPHA_BETA * VOLFRA_PORE_NOD( CV_NOD ) * &
+                    ALPHA= ALPHA_BETA * VOLFRA_PORE_NOD( CV_NOD ) * &
                         ( max(0.0,SATURA (IPHASE, CV_NOD ) * &
                         DENOLD( 1, IPHASE, CV_NOD ) ) + &
                         max(0.0,SATURA (JPHASE, CV_NOD ) * &
@@ -165,9 +148,9 @@ contains
                         K_COMP2( ICOMP, CV_NOD, JPHASE, IPHASE ) ) / DT
 
                     COMP_ABSORB( IPHASE, IPHASE, CV_NOD ) = &
-                        COMP_ABSORB( IPHASE, IPHASE, CV_NOD ) + ALPHA( CV_NOD )
+                        COMP_ABSORB( IPHASE, IPHASE, CV_NOD ) + ALPHA
 
-                    COMP_ABSORB( IPHASE, JPHASE, CV_NOD ) = - ALPHA( CV_NOD ) * &
+                    COMP_ABSORB( IPHASE, JPHASE, CV_NOD ) = - ALPHA* &
                         K_COMP2( ICOMP, CV_NOD, JPHASE, IPHASE )
 
                 END DO
@@ -175,14 +158,27 @@ contains
 
         END DO
 
-        deallocate( alpha, sum_nod, volfra_pore_nod, k_comp, k_comp2 )
+        do cv_nod = 1, Mdims%cv_nonods
+            if( satura( 1, cv_nod ) > 0.95 ) then
+              do iphase = 1, Mdims%nphase
+                 do jphase = min( iphase + 1, Mdims%nphase ), Mdims%nphase
+                    Comp_Absorb( iphase, jphase, cv_nod ) = &
+                       Comp_Absorb( iphase, jphase, cv_nod ) * max( 0.01, &
+                       20.0 * ( 1. - satura ( 1, cv_nod ) ) )
+                 end do
+              end do
+            end if
+        end do
+
+
+        deallocate( sum_nod, volfra_pore_nod, k_comp, k_comp2 )
 
         RETURN
 
     end subroutine Calculate_ComponentAbsorptionTerm
 
 
-    subroutine Calculate_ComponentDiffusionTerm( state, packed_state, &
+    subroutine Calculate_ComponentDiffusionTerm( packed_state, &
         Mdims, CV_GIdims, CV_funs,&
         mat_ndgln, u_ndgln, x_ndgln, &
         ncomp_diff_coef, comp_diffusion_opt, &
@@ -194,7 +190,6 @@ contains
         !!$ NCOMP_DIFF_COEF,  integer defining how many coeff's are needed to define the diffusion
         !!$ COMP_DIFF_COEF( Mdims%ncomp,  NCOMP_DIFF_COEF, Mdims%nphase  )
         implicit none
-        type( state_type ), dimension( : ), intent( inout ) :: state
         type( state_type ), intent( inout ) :: packed_state
         type(multi_dimensions), intent(in) :: Mdims
         type(multi_GI_dimensions), intent(in) :: CV_GIdims
@@ -204,7 +199,7 @@ contains
         real, dimension( :, : ), intent( in ) :: comp_diff_coef
         real, dimension( :, :, :, : ),intent( inout ) :: comp_diffusion
         !!$ Local variables:
-        integer :: ele, cv_nod, mat_nod, iphase, idim, u_iloc, u_inod
+        integer :: ele, mat_nod, iphase, idim, u_iloc, u_inod
         real :: diff_molecular, diff_longitudinal, diff_transverse
         real, dimension( : ), allocatable :: ud, mat_u, nu, nv, nw
         type( vector_field ), pointer :: x_all
@@ -284,8 +279,8 @@ contains
         ! Local variables
         REAL, DIMENSION( :, : ), ALLOCATABLE :: MASS, INV_MASS, MASS2U, INV_MASS_NM
         INTEGER :: &
-            ELE, MAT_ILOC, MAT_JLOC, CV_GI, U_JLOC, MAT_KLOC, MAT_NODI, MAT_NOD, &
-            U_NODJ, IPHASE, U_NODJ_IP, IDIM, JDIM, MAT_NOD_ID_IP, CV_GI_SHORT
+            ELE, MAT_ILOC, MAT_JLOC, CV_GI, U_JLOC, MAT_KLOC, MAT_NOD, &
+            U_NODJ, IPHASE, U_NODJ_IP, IDIM, MAT_NOD_ID_IP, CV_GI_SHORT
         REAL :: NN, NFEMU, MASELE
         type(multi_dev_shape_funs) :: Devfuns
 
@@ -424,11 +419,11 @@ contains
     END SUBROUTINE CALC_COMP_DIF_TEN
 
 
-    subroutine Calc_KComp2( cv_nonods, nphase, ncomp, icomp, KComp_Sigmoid, &
+    subroutine Calc_KComp2( cv_nonods, nphase, icomp, KComp_Sigmoid, &
         Satura, K_Comp, max_k, min_k, &
         K_Comp2 )
         implicit none
-        integer, intent( in ) :: cv_nonods, nphase, ncomp, icomp
+        integer, intent( in ) :: cv_nonods, nphase, icomp
         logical, intent( in ) :: KComp_Sigmoid
         real, dimension( :, : ), intent( in ) :: Satura
         real, dimension( :, :, : ), intent( in ) :: K_Comp
@@ -448,8 +443,6 @@ contains
                     do jphase = iphase + 1, nphase, 1
                         K_Comp2( icomp, cv_nod, iphase, jphase ) = &
                             1. / K_Comp( icomp, iphase, jphase )
-                       !ewrite(3,*)'KComp:', icomp, iphase, jphase, cv_nod, ':', &
-                       !     K_Comp2( icomp, cv_nod, iphase, jphase )
                     end do
                 end do
             end do
@@ -464,14 +457,8 @@ contains
                             K_Comp2( icomp, cv_nod, iphase, jphase ) = &
                                 1. / sigmoid_function( satura(iphase,cv_nod ), &
                                 Sat0, Width, min_k, max_k )
-                               !Sat0, Width, max_k, min_k )
                         endif
-                       !K_Comp2( icomp, cv_nod, iphase, jphase ) = K_Comp2( icomp, cv_nod, jphase, iphase )
                     end do
-                   !ewrite(3,*)'icomp, iphase, sat, kcomp:',icomp, cv_nod, iphase, &
-                   !     satura( ( iphase - 1 ) * cv_nonods + cv_nod ), '::', &
-                   !     ( K_Comp2( icomp, cv_nod, iphase, jphase ), &
-                   !     jphase = 1, nphase )
                 end do
             end do
 
@@ -538,8 +525,8 @@ contains
       ! =1 is full adjustment to make sure we have sum to 1.
       ! =0 is no adjustment.
       real :: dt, sum2one_relax, comp_sum
-      integer :: cv_nonods, nphase, ncomp2, iphase, cv_nodi, icomp
-      logical :: ensure_positive, use_comp_sum2one_sou
+      integer :: cv_nonods, nphase, ncomp2, iphase, cv_nodi
+      logical :: ensure_positive
       !Working pointer
       real, dimension(:,:), pointer ::satura
       type( vector_field ), pointer :: MeanPoreCV
@@ -589,7 +576,5 @@ contains
 
       RETURN
     END SUBROUTINE CAL_COMP_SUM2ONE_SOU
-
-
 
 end module Compositional_Terms

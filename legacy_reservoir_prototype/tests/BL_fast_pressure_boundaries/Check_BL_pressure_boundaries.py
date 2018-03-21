@@ -19,7 +19,7 @@ print 'Running the model'
 #Get path
 
 path = os.getcwd()
-binpath = path[:path.index('legacy_reservoir_prototype')] + 'bin/multiphase_prototype'
+binpath = path[:path.index('legacy_reservoir_prototype')] + 'bin/icferst'
 os.system('rm -f ' + path+ '/*.vtu')
 os.system(binpath + ' ' + path + '/BL_fast.mpml')
 #THIS SCRIPT CHECKS THE SOLUTION OBTAINED USING IC-FERST USING P2DGP1DG AND 
@@ -29,8 +29,8 @@ os.system(binpath + ' ' + path + '/BL_fast.mpml')
 #TOLERANCE OF THE CHECKING
 #The present values are just above the values I got when writing the script
 #SINCE THIS IS NOT AN ANALYTICAL SOLUTION THE TOLERANCES ARE BIGGER
-Tolerance_L1_NORM = 0.05
-Tolerance_L2_NORM = 0.005
+Tolerance_L1_NORM = 0.0217
+Tolerance_L2_NORM = 0.0009
 
 AutomaticLine = 0
 
@@ -97,29 +97,11 @@ reader = vtk.vtkXMLUnstructuredGridReader()
 reader.SetFileName(filename+'_'+str(vtu_number)+'.vtu')
 
 #reader.Update()
-ugrid = reader.GetOutput()
-ugrid.Update()
+
+ugrid = reader.GetOutputPort()
+#ugrid.Update()
+
 ###########Create the probe line#############
-#Get bounds of the domain
-Aux = ugrid.GetBounds()
-
-if (AutomaticLine > 0):
-    x0 = float(Aux[0])
-    x1 = float(Aux[1])
-    y0 = float(Aux[2])
-    y1 = float(Aux[3])
-    z0 = float(Aux[4])
-    z1 = float(Aux[5])  
-
-if (AutomaticLine == 1):#Straight line across the middle
-    x0 = float(Aux[0])
-    x1 = float(Aux[1])
-    y0 = max(float(Aux[2])/2., float(Aux[3])/2.)
-    y1 = y0
-    z0 = max(float(Aux[4])/2., float(Aux[5])/2.)
-    z1 = z0
-
-#Nothing to do for diagonal, it is already prepared
         
 detector = []
 
@@ -154,8 +136,11 @@ detectors.SetPoints(points)
 
 
 probe = vtk.vtkProbeFilter()
-probe.SetSource(ugrid)
-probe.SetInput(detectors)
+probe.SetInputConnection(ugrid)
+
+
+probe.SetSourceConnection(ugrid)
+probe.SetInputData(detectors)
 probe.Update()
 
 data = probe.GetOutput()
@@ -232,11 +217,13 @@ Passed = True
 
 if (L1_norm > Tolerance_L1_NORM): Passed = False
 if (L2_norm > Tolerance_L2_NORM): Passed = False
-print L1_norm, L2_norm
+#print L1_norm, L2_norm
 if (Passed): 
     print 'BL works OK'
 else:
     print 'BL does NOT work'
+#Check the experiment has finished
+if (AutoNumber < 20): Passed = False
 
 if (showPlot):
     fig, ax = plt.subplots()

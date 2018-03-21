@@ -45,8 +45,8 @@ module shape_functions_Linear_Quadratic
   use multi_data_types
 
   logical :: NEW_HIGH_ORDER_VOL_QUADRATIC_ELE_QUADRATURE = .false.
-  !    logical :: NEW_QUADRATIC_ELE_QUADRATURE = .true.
-  logical :: NEW_QUADRATIC_ELE_QUADRATURE = .false.
+  logical :: NEW_QUADRATIC_ELE_QUADRATURE = .false.!With this true it does not work...we need to fix it
+
 
     interface DETNLXR
         module procedure DETNLXR1
@@ -1209,16 +1209,11 @@ contains
        end Select Conditional_CV_NLOC_1D
        GIdims%sbcvngi = 1 ; GIdims%nface = 2
 !!$
-    case( 3, 4 ) ! Triangles
+    case( 3, 4) ! Triangles
        Conditional_CV_NLOC_2D_Tri: Select Case( cv_nloc )
        case( 3 ) ! Linear triangle
           Conditional_LinTriangle: if( QUAD_OVER_WHOLE_ELE ) then
              GIdims%cv_ngi = 3 ; GIdims%sbcvngi = 2 ; GIdims%scvngi = 2
-             if( u_nloc == 6 ) then
-                GIdims%cv_ngi = 7 ; GIdims%sbcvngi = 3 ; GIdims%scvngi = 3
-             elseif( u_nloc == 10 ) then
-                GIdims%cv_ngi = 14 ; GIdims%sbcvngi = 4 ; GIdims%scvngi = 4
-             end if
 !!$
              Select Case( whole_ele_volume_order )
              case( 1 )
@@ -1234,6 +1229,11 @@ contains
                 GIdims%sbcvngi = 2 ; GIdims%scvngi = 2
              end Select
 !!$
+             if( u_nloc == 6 ) then
+                GIdims%cv_ngi = 7 ; GIdims%sbcvngi = 3 ; GIdims%scvngi = 3
+             elseif( u_nloc == 10 .or. u_nloc == 4) then!Sixth order quadrature for bubble velocity element or P3
+                GIdims%cv_ngi = 14 ; GIdims%sbcvngi = 4 ; GIdims%scvngi = 4
+             end if
           else
              Select Case( volume_order )
              case( 1 )
@@ -1388,8 +1388,6 @@ contains
        case( 4 ) ! Linear
           Conditional_LinTets: if( QUAD_OVER_WHOLE_ELE ) then
              GIdims%cv_ngi = 4 ; GIdims%sbcvngi = 3 ; GIdims%scvngi = 3
-             if( u_nloc == 10 ) & ! Use a quadratic interpolation pt set
-                  GIdims%cv_ngi = 11 ; GIdims%sbcvngi = 7 ; GIdims%scvngi = 7
 !!$
              Select Case( whole_ele_volume_order )
              case( 1 )
@@ -1408,7 +1406,14 @@ contains
              case( 3 )
                 GIdims%sbcvngi = 7 ; GIdims%scvngi = 7
              end Select
-!!$
+!!$          ! Use a quadratic interpolation pt set for quad tets
+             if( u_nloc == 10 .or. u_nloc == 5) then
+                  GIdims%cv_ngi = 11 ; GIdims%sbcvngi = 7 ; GIdims%scvngi = 7
+             end if
+             ! Use sixth order quadrature interpolation set for bubble tets
+             if( u_nloc == 5) then
+                GIdims%cv_ngi = 15 ; GIdims%sbcvngi = 7 ; GIdims%scvngi = 7
+             end if
           else
              Select Case( volume_order )
              case( 1 )
@@ -1423,7 +1428,6 @@ contains
              case( 2 )
                 GIdims%sbcvngi = 3*4 ; GIdims%scvngi = 6*4
              end Select
-!!$
           end if Conditional_LinTets
 !!$ ===
        case( 10 ) ! Quadratic
@@ -7948,6 +7952,10 @@ contains
     ewrite(3,*)'just inside SHAPE_one_ele'
     !      stop 7299
 
+    !For P0DG elements there is only 1 node, we initialize here to 1 to avoid some problems later
+    !where all the elements of U_SLOCLIST may not be assigned to 1 in this case
+    if (U_SNLOC == 1 .and. size(U_SLOCLIST, 1) > 2) U_SLOCLIST( :, 1 ) = 1.0
+
     LOWQUA = .false. ; MLOC = 1 ; SMLOC = 1
     ALLOCATE( M( MLOC, CV_NGI ) )
     ALLOCATE( MLX( MLOC, CV_NGI ) )
@@ -8014,6 +8022,23 @@ contains
     INTEGER :: IPOLY, IQADRA, gi, gj, ggi, i, j, ii
 
     Conditional_NWICEL: Select Case( NWICEL )
+    case( 0 )!For P0 elements (not tested at all)
+        if (.not. is_P0DGP1CV) then
+            ewrite(0,*) "WARNING: this element has not been tested. If it works remove this message from multi_shape_fc_ND.F90"
+        end if
+        M = 1.0
+        N = 1.0
+        NLX = 0.;NLY = 0.;NLZ = 0.
+        MLX = 0.;MLY = 0.; MLZ = 0.
+        IF(.NOT.D3) THEN
+            WEIGHT = 0.5
+            SWEIGH = 2.0
+        else
+            WEIGHT = 1./6.
+            SWEIGH = 0.5
+        end if
+        SN = 1.0; SNLX= 0.; SNLY= 0.
+        SM = 1.0; SMLX= 0.; SMLY= 0.
     case( 1 )
        IF(.NOT.D3) THEN
           CALL RE2DN4(LOWQUA,NGI,0,NLOC,MLOC, &
@@ -8074,7 +8099,6 @@ contains
        FLAbort("Option not found")
 !!$
     end Select Conditional_NWICEL
-
     return
   END SUBROUTINE SHAPE
 
@@ -8643,9 +8667,29 @@ contains
           L2(11)=BETA
           ! ENDOF IF(NGI.EQ.11) THEN...
        ENDIF
+
+        if (NGI == 15) then!Sixth order quadrature, for bubble shape functions or P3
+          ! Degree of precision is 6
+         L1=(/0.2500000000000000, 0.0000000000000000, 0.3333333333333333, 0.3333333333333333, 0.3333333333333333, &
+             0.7272727272727273, 0.0909090909090909, 0.0909090909090909, 0.0909090909090909, 0.4334498464263357, &
+             0.0665501535736643, 0.0665501535736643, 0.0665501535736643, 0.4334498464263357, 0.4334498464263357/)
+         L2=(/0.2500000000000000, 0.3333333333333333, 0.3333333333333333, 0.3333333333333333, 0.0000000000000000, &
+             0.0909090909090909, 0.0909090909090909, 0.0909090909090909, 0.7272727272727273, 0.0665501535736643, &
+             0.4334498464263357, 0.0665501535736643, 0.4334498464263357, 0.0665501535736643, 0.4334498464263357/)
+         L3=(/0.2500000000000000, 0.3333333333333333, 0.3333333333333333, 0.0000000000000000, 0.3333333333333333, &
+             0.0909090909090909, 0.0909090909090909, 0.7272727272727273, 0.0909090909090909, 0.0665501535736643, &
+             0.0665501535736643, 0.4334498464263357, 0.4334498464263357, 0.4334498464263357, 0.0665501535736643/)
+         !We divide the weights later by 6
+         WEIGHT=(/0.1817020685825351, 0.0361607142857143, 0.0361607142857143, 0.0361607142857143, 0.0361607142857143, &
+             0.0698714945161738, 0.0698714945161738, 0.0698714945161738, 0.0698714945161738, 0.0656948493683187, &
+             0.0656948493683187, 0.0656948493683187, 0.0656948493683187, 0.0656948493683187, 0.0656948493683187/)
+       end if
+
+
        DO I=1,NGI
           L4(I)=1.0-L1(I)-L2(I)-L3(I)
        END DO
+
        ! Now multiply by 1/6. to get weigts correct...
        DO I=1,NGI
           WEIGHT(I)=WEIGHT(I)/6.
@@ -9413,7 +9457,8 @@ contains
     ELSE IF(NDIM==2) THEN
        ! 2d:
        ! linear triangle:
-       IF(CV_NLOC==3) THEN
+       IF(CV_NLOC==3 .or. CV_NLOC==4) THEN
+          !Bubble linear, same ordering. Bubble node is internal
           IF(NFACE/=3) THEN
              EWRITE(3,*) 'NFACE not correct NFACE=',NFACE
              STOP 4333
@@ -9437,22 +9482,22 @@ contains
              CV_SLOCLIST(3,1)=3
              CV_SLOCLIST(3,2)=2
           end if
-
-          ! linear quad:
-       ELSE IF(CV_NLOC==4) THEN
-          IF(NFACE/=4) THEN
-             EWRITE(3,*) 'NFACE not correct NFACE=',NFACE
-             STOP 4334
-          END IF
-          CV_SLOCLIST(1,1)=1
-          CV_SLOCLIST(1,2)=3
-          CV_SLOCLIST(2,1)=2
-          CV_SLOCLIST(2,2)=4
-          CV_SLOCLIST(3,1)=1
-          CV_SLOCLIST(3,2)=2
-          CV_SLOCLIST(4,1)=1
-          CV_SLOCLIST(4,2)=2
           ! quadratic triangle:
+!          ! linear quad:
+!       ELSE IF(CV_NLOC==4) THEN
+!          IF(NFACE/=4) THEN
+!             EWRITE(3,*) 'NFACE not correct NFACE=',NFACE
+!             STOP 4334
+!          END IF
+!          CV_SLOCLIST(1,1)=1
+!          CV_SLOCLIST(1,2)=3
+!          CV_SLOCLIST(2,1)=2
+!          CV_SLOCLIST(2,2)=4
+!          CV_SLOCLIST(3,1)=1
+!          CV_SLOCLIST(3,2)=2
+!          CV_SLOCLIST(4,1)=1
+!          CV_SLOCLIST(4,2)=2
+!          ! quadratic triangle:
        ELSE IF(CV_NLOC==6) THEN
           IF(NFACE/=3) THEN
              EWRITE(3,*) 'NFACE not correct NFACE=',NFACE
@@ -9547,7 +9592,8 @@ contains
     ELSE IF(NDIM==3) THEN
        ! 3d:
        ! linear triangle:
-       IF(CV_NLOC==4) THEN
+       IF(CV_NLOC==4 .or. CV_NLOC==5) THEN
+       !Bubble linear, same ordering. Bubble node is internal
           IF(NFACE/=4) THEN
              EWRITE(3,*) 'NFACE not correct NFACE=',NFACE
              STOP 4337
@@ -9577,9 +9623,9 @@ contains
              CV_SLOCLIST(1,2)=2
              CV_SLOCLIST(1,3)=3
 
-             !                CV_SLOCLIST(2,1)=1
-             !                CV_SLOCLIST(2,2)=4
-             !                CV_SLOCLIST(2,3)=2
+!                CV_SLOCLIST(2,1)=1
+!                CV_SLOCLIST(2,2)=4
+!                CV_SLOCLIST(2,3)=2
 
              CV_SLOCLIST(2,1)=2
              CV_SLOCLIST(2,2)=1
@@ -9960,7 +10006,9 @@ contains
 
     Conditional_Dimensionality: if( d3 ) then
        Select Case ( nloc )
-       case( 4 ) ! Linear tets
+       case (1)     ! Constant tets
+          nwicel = 0
+       case( 4, 5 ) ! Linear tets
           nwicel = 4
        case( 8 ) ! Linear hex
           nwicel = 1
@@ -9976,6 +10024,8 @@ contains
 !!$
     else
        Select Case ( nloc )
+       case (1)  ! Constant triangle
+          nwicel = 0
        case( 3 ) ! Linear triangle
           nwicel = 4
        case( 4 ) ! Linear quad

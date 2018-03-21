@@ -106,9 +106,12 @@ contains
     type(integer_set), intent(in), optional :: lock_faces
     logical, intent(in), optional :: allow_boundary_elements
     type(vector_field) :: expanded_positions
+    !variable to retry mesh adapt if there is an error
+    logical :: adapt_error
+    integer :: i
 
     assert(.not. mesh_periodic(old_positions))
-
+    
     if(isparallel()) then
       ! generate stripped versions of the position and metric fields
       call strip_l2_halo(old_positions, metric, stripped_positions, stripped_metric)
@@ -133,13 +136,57 @@ contains
           call adapt_mesh_mba3d(stripped_positions, stripped_metric, new_positions, &
                              force_preserve_regions=force_preserve_regions)
         else
-          call adapt_mesh_3d(stripped_positions, stripped_metric, new_positions, &
-                             force_preserve_regions=force_preserve_regions, lock_faces=lock_faces)
+          adapt_error = .false.
+          !We try a maximum of two times, otherwise the old mesh is kept
+          do i = 1, 2
+              call adapt_mesh_3d(stripped_positions, stripped_metric, new_positions, &
+                  force_preserve_regions=force_preserve_regions, lock_faces=lock_faces, adapt_error = adapt_error)
+              call allor(adapt_error)
+              !#####Section to ensure that mesh adaptivity does not stop the simulation#######
+              if (.not.adapt_error) then
+                exit!Life is good! We can continue!
+              else
+                  !First deallocate new mesh as it is useless
+                  if (associated(new_positions%refcount)) call deallocate(new_positions)
+
+                  select case (i)
+                      case (1)!First time, we retry with more conservative settings
+                              !imposed in Adapt_Integration.F90
+                          !Restart to original mesh
+                          if (getprocno() == 1) then
+                            ewrite(0,*) "##############################################################################################"
+                            ewrite(0,*) "WARNING: Mesh adaptivity failed to create a mesh, trying again with more conservative settings"
+                            ewrite(0,*) "##############################################################################################"
+                          end if
+                          if(isparallel()) then
+                              ! generate stripped versions of the position and metric fields
+                              call strip_l2_halo(old_positions, metric, stripped_positions, stripped_metric)
+                          else
+                              stripped_positions = old_positions
+                              stripped_metric = metric
+                          end if
+                      case default!Second time, back to original mesh...
+                          !This can also be potentially improved by only forcing the cpu domain that has failed to go back to the old mesh...
+                          if (getprocno() == 1) then
+                            ewrite(0,*) "##############################################################################################"
+                            ewrite(0,*) "WARNING: Mesh adaptivity failed to create a mesh again. Original mesh will be re-used. This may fail if using CVGalerkin"
+                            ewrite(0,*) "##############################################################################################"
+                          end if
+                          call allocate(new_positions,old_positions%dim,old_positions%mesh,name=trim(old_positions%name))
+                          call set(new_positions,old_positions)
+                          call incref(new_positions)
+                          !...deallocate everything and leave subroutine
+                          call deallocate(stripped_metric)
+                          call deallocate(stripped_positions)
+                          return
+                  end select
+              end if
+              !###############################################################################
+          end do
         end if
       case default
         FLAbort("Mesh adaptivity requires a 1D, 2D or 3D mesh")
     end select
-
     if(isparallel()) then
       expanded_positions = expand_positions_halo(new_positions)
       call deallocate(new_positions)
@@ -915,7 +962,8 @@ contains
       call adapt_mesh_periodic(old_positions, metric, new_positions, force_preserve_regions=force_preserve_regions)
     ! Nonperiodic case
     else
-      call adapt_mesh_simple(old_positions, metric, new_positions, node_ownership=node_ownership, force_preserve_regions=force_preserve_regions)
+      call adapt_mesh_simple(old_positions, metric, new_positions, node_ownership=node_ownership, &
+            force_preserve_regions=force_preserve_regions)
     end if
   end subroutine adapt_mesh
 
@@ -1063,6 +1111,9 @@ contains
     integer :: ierr
     type(detector_list_ptr), dimension(:), pointer :: detector_list_array => null()
     type(detector_type), pointer :: detector => null()
+
+    ! Node locking variable
+    type(integer_set) :: lock_faces
 
     real :: global_min_quality, quality_tolerance
 

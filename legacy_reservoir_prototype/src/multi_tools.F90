@@ -1,4 +1,4 @@
-  
+
 !    Copyright (C) 2006 Imperial College London and others.
 !
 !    Please see the AUTHORS file in the main source directory for a full list
@@ -26,117 +26,32 @@
 !    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
 !    USA
 #include "fdebug.h"
-  
+
 
 module multi_tools
     use fldebug
     use fields
+    use global_parameters, only: OPTION_PATH_LEN, PYTHON_FUNC_LEN, PI, is_porous_media
+    use vector_tools
 
     implicit none
 
+    type bad_elements
+        integer :: bad_ele
+        real :: angle
+        real :: perp_height ! perp height from base (assuming an isosceles triangle)
+        real, allocatable, dimension(:,:) :: rotmatrix ! the rotation matrix to 'stretch' the bad element in the direction normal to the big angle
+        real :: base ! length of side opposite the large angle
+    end type
+
+
 contains
-
-    !sprint_to_do!update to use new memory, or remove it since it is unused
-    SUBROUTINE SIMPNORM( NORMX, NORMY, NORMZ, D3, &
-        SNDGLN, STOTEL, SNLOC, X_NONODS, NONODS, ELE, &
-        X, Y, Z, &
-        NCOLM, FINDRM, COLM)
-        ! Calculate an approx normal (normx,normy,normz)
-        IMPLICIT NONE
-
-        REAL, intent( inout ) :: NORMX, NORMY, NORMZ
-        LOGICAL, intent( in ) :: D3
-        INTEGER, intent( in ) :: STOTEL, SNLOC, X_NONODS, NONODS, ELE, NCOLM
-        INTEGER, DIMENSION( : ), intent( in ) :: SNDGLN
-        REAL, DIMENSION( :), intent( in ) :: X, Y, Z
-        INTEGER, DIMENSION( : ), intent( in ) :: FINDRM
-        INTEGER, DIMENSION( : ), intent( in ) :: COLM
-        ! Local variables
-        REAL :: XCS, YCS, ZCS, XCV, YCV, ZCV, NORM
-        INTEGER :: ICV, L, IGL, L2, IGL2, COUNT, COUNT2, NODJ, NODJ2
-        LOGICAL :: FOUND, SURF, ALLSUF
-
-        XCS = 0.
-        YCS = 0.
-        ZCS = 0.
-        DO L=1,SNLOC
-            IGL = SNDGLN(( ELE - 1 ) * SNLOC + L )
-            XCS = XCS + X( IGL ) / REAL( SNLOC )
-            YCS = YCS + Y( IGL ) / REAL( SNLOC )
-            IF(D3) ZCS = ZCS + Z( IGL ) / REAL( SNLOC )
-        END DO
-        ewrite(3,*)'XCS,YCS,ZCS:',XCS,YCS,ZCS
-
-        XCV = 0.
-        YCV = 0.
-        ZCV = 0.
-        ICV = 0
-        L = 1
-        IGL = SNDGLN(( ELE - 1 ) * SNLOC + L )
-
-        Loop_Row: DO COUNT = FINDRM( IGL ) , FINDRM( IGL + 1 ) - 1, 1
-            NODJ = COLM( COUNT )
-            Inside_matrix: IF(NODJ <= NONODS) THEN
-                ! Make sure its not a surface node of surface element ELE
-                SURF = .FALSE.
-                DO L2 = 1, SNLOC
-                    IGL2 = SNDGLN(( ELE - 1 ) * SNLOC + L2 )
-                    IF( IGL2 == NODJ ) SURF = .TRUE.
-                END DO
-
-                Cond_Surf: IF( .NOT. SURF) THEN
-                    ! make sure NODJ is connected to all surface nodes and is not a surface node for
-                    ! surface element.
-                    ALLSUF = .TRUE.
-                    DO L2 = 1, SNLOC
-                        IGL2 = SNDGLN(( ELE - 1 ) * SNLOC + L2 )
-                        FOUND = .FALSE.
-                        DO COUNT2 = FINDRM( NODJ ) , FINDRM( NODJ + 1 ) - 1, 1
-                            NODJ2 = COLM( COUNT2 )
-                            IF( IGL2 == NODJ2) FOUND = .TRUE.
-                        END DO
-                        IF( .NOT. FOUND) ALLSUF = .FALSE.
-                    END DO
-
-                    IF( ALLSUF ) THEN
-                        XCV = XCV + X( NODJ )
-                        YCV = YCV + Y( NODJ )
-                        IF( D3 ) ZCV = ZCV + Z( NODJ )
-                        ICV = ICV + 1
-                    ENDIF
-
-                ENDIF Cond_Surf
-            ENDIF Inside_matrix
-
-        END DO Loop_Row
-
-        XCV = XCV / REAL( ICV )
-        YCV = YCV / REAL( ICV )
-        IF( D3 ) ZCV = ZCV / REAL( ICV )
-        NORMX = XCS - XCV
-        NORMY = YCS - YCV
-        NORMZ = ZCS - ZCV
-
-        NORM = NORMX **2 + NORMY **2
-        IF( D3 ) NORM = NORM + NORMZ ** 2
-        NORM = MAX( 1.E-15, SQRT( NORM ))
-
-        NORMX = NORMX / NORM
-        NORMY = NORMY / NORM
-        IF( D3 ) NORMZ = NORMZ / NORM
-
-        RETURN
-
-    END SUBROUTINE SIMPNORM
-
 
     REAL FUNCTION R2NORM( VEC, NVEC )
         IMPLICIT NONE
         INTEGER :: NVEC
         REAL, DIMENSION( NVEC ) :: VEC
         ! Local variables
-        INTEGER :: I
-        REAL :: RSUM
 
         R2NORM = SQRT( SUM( VEC**2 ) )
 
@@ -393,12 +308,12 @@ contains
 
 
     SUBROUTINE CALC_FACE_ELE( FACE_ELE, TOTELE, STOTEL, NFACE, &
-        NCOLELE, FINELE, COLELE, CV_NLOC, CV_SNLOC, CV_NONODS, CV_NDGLN, CV_SNDGLN, &
+        FINELE, COLELE, CV_NLOC, CV_SNLOC, CV_NONODS, CV_NDGLN, CV_SNDGLN, &
         CV_SLOCLIST, X_NLOC, X_NDGLN)
         ! Calculate FACE_ELE - the list of elements surrounding an
         ! element and referenced with a face -ve values correspond to surface elements.
         IMPLICIT NONE
-        INTEGER, intent( in ) :: TOTELE, STOTEL, NFACE, NCOLELE, CV_NLOC, CV_SNLOC, CV_NONODS, &
+        INTEGER, intent( in ) :: TOTELE, STOTEL, NFACE, CV_NLOC, CV_SNLOC, CV_NONODS, &
             X_NLOC
         INTEGER, DIMENSION( : ), intent( in ) :: CV_NDGLN
         INTEGER, DIMENSION( : ), intent( in ) :: X_NDGLN
@@ -560,6 +475,485 @@ contains
         RETURN
 
     END SUBROUTINE CALC_FACE_ELE
+
+    !sprint_to_do; we need to see how this behaves with many regions ids
+    subroutine assign_val(outval,inval)
+        !Copies the data from inval to outval safely.
+        !If the sizes are different outval is populated using the first value of inval
+        implicit none
+        real, dimension(:), intent(inout) :: outval
+        real, dimension(:), intent(in) :: inval
+
+        if (size(outval)/=size(inval)) then
+            outval = inval(1)
+        else
+            outval = inval
+        end if
+    end subroutine assign_val
+
+
+    real function table_interpolation(X_points, Y_points, input_X)
+        !This function returns the value at position input_X using
+        !X_points, Y_points to form a linear (size == 2) or quadratic (size == 3) interpolation
+        implicit none
+        real, intent(in) :: input_X
+        real, dimension(:), intent(in) :: X_points, Y_points
+        !Local variables
+        integer :: k, j, siz
+        real, dimension(size(X_points),size(X_points)) :: A
+        real, dimension(size(X_points)) :: b
+
+        siz = size(X_points)
+
+        do k = 1, siz
+            do j = 1, siz!Fill columns
+                A(j,k) = X_points(j)**real(siz-k)
+                if (j==k) A(j,k) = A(j,k) + A(j,k)*(1d-7*real(rand(j)))!to avoid non-invertible matrices
+            end do
+            b(k) = Y_points(k)
+        end do
+        !Solve system
+        call invert(A); b = matmul(A, b)
+        if (siz == 2) then!Linear approximation
+            table_interpolation = b(1) * input_X + b(2)
+        else!quadratic approximation
+            table_interpolation = b(1) * input_X**2. + b(2) * input_X + b(3)
+        end if
+    end function table_interpolation
+
+    subroutine read_csv_table(data_array, path_to_table, extra_data)
+        !Template of csv table
+        !OPTIONAL section (header)
+        !real1,real2,real3,..., size(extra_data)
+        !rows,columns
+        !2,3
+        !Pressure,Saturation
+        !1000,0.9
+        !250,0.5
+        !100,0.1
+        implicit none
+        real, dimension(:,:), allocatable, intent(inout) :: data_array
+        character( len = option_path_len ), intent(in) :: path_to_table
+        real, optional, dimension(:), intent(inout) :: extra_data
+        !Local variables
+        integer :: i, ierr
+        integer, dimension(2) :: table_size
+        !Open file
+        open(unit= 89, file=trim(path_to_table)//".csv", status='old', action='read')
+        if (present(extra_data)) then
+            !The extra data is composed of one line of headers that we ignore plus one extra line with the data
+            read(89,*)!skip header
+            read(89,*) extra_data
+        end if
+        read(89,*)!skip header
+        !CSV table must start with the number of columns by rows
+        read(89,*) table_size
+        allocate(data_array(table_size(1), table_size(2)))
+        !Skip the headers
+        read(89,*);
+        !Read the table
+        do i = 1, table_size(2)
+            read(89,*, IOSTAT=ierr) data_array(1:table_size(1), i)
+            if (ierr/=0) exit
+        end do
+        close(89)
+    end subroutine read_csv_table
+
+
+    subroutine extract_strings_from_csv_file(csv_table_strings, path_to_table, Nentries)
+        !This subroutine reads a csv file and returns
+        implicit none
+        integer, intent(out) :: Nentries
+        character( len = option_path_len ), intent(in) :: path_to_table
+        character(len=option_path_len), dimension(:,:),  allocatable, intent(out) :: csv_table_strings
+        !Local variables
+        integer :: i, ierr, start
+        !Allocate table
+        allocate(csv_table_strings(10000,4))!This should be enough
+
+        !Open file
+        open(unit= 89, file=trim(path_to_table)//'.csv', status='old', action='read')
+        !CSV table must start with the number of columns by rows
+        !Read the table
+        i = 1
+        start = 1
+        do while (.true.)
+            read(89,*, IOSTAT=ierr) csv_table_strings(i,:)!cadena
+            if (ierr/=0) exit
+            !Extract four strings from cadena
+            i = i + 1
+        end do
+        Nentries = i-1
+        close(89)
+
+    end subroutine extract_strings_from_csv_file
+
+    !Subroutine to print Arrays by (columns,rows)
+    !Matrix = 2D Array
+    subroutine printMatrix(Matrix)
+        implicit none
+
+        Integer :: length,i,j, k
+        character (len=1000000) :: cadena
+        character (len=100) :: aux
+        real, intent(in), dimension(:,:):: Matrix
+        !Local
+        real, dimension(size(matrix,2),size(matrix,1)) :: auxMatrix
+
+        auxMatrix = transpose(Matrix)
+
+        length = size(auxMatrix,2);
+        do i = 1,size(auxMatrix,1)
+            print *,""
+            cadena = ""
+            do j = 1 , length
+                write(aux,*), auxMatrix(i,j)
+                k = index(trim(aux),"E",.true.)
+                if (k/=0) then
+                    aux = aux(1:k-6)//trim(aux(k:))
+                end if
+
+                cadena = trim(cadena)//' '//trim(aux)
+            end do
+            print '(A $)', trim(cadena)
+        end do
+
+        print *,"";
+    end subroutine PrintMatrix
+
+
+    subroutine CheckElementAngles(X_ALL, totele, x_ndgln, X_nloc, MaxAngle, Quality_list, bad_element_flag, number_bad)
+        !This function checks the angles of an input element. If one angle is above
+        !the Maxangle it will be true in the list
+
+        Implicit none
+        !Global variables
+        type(bad_elements), dimension(:), intent(inout) :: Quality_list
+        integer, optional, intent(out) :: number_bad
+        real, intent (in) :: MaxAngle
+        integer, dimension(:), intent(in) :: x_ndgln
+        integer, intent(in) :: x_nloc, totele
+        logical, intent(in) :: bad_element_flag
+        !Local variables
+        integer :: ELE, i, k
+        logical :: Bad_found
+        real :: MxAngl
+        !Definition of Pi
+        real, dimension(:,:), pointer:: X_ALL
+        real, parameter :: pi = acos(0.d0) * 2d0
+
+        !Prepare data
+        do i = 1, size(Quality_list)
+            Quality_list(i)%bad_ele = -1!Initialize with negative values
+        end do
+
+        !Convert input angles to radians
+        MxAngl = pi/180. * MaxAngle
+        k = 1 ! number of bad elements
+        if (size(X_ALL,1)==2) then!2D triangles
+            do ele = 1, totele
+                Bad_found = Check_element(X_ALL, x_ndgln, (ele-1)*X_nloc, 1, 2, 3, MxAngl, Quality_list(ele))
+                if (Bad_found) then
+                    Quality_list(k)%bad_ele = ele
+                    k = k + 1
+                end if
+            end do
+        else if(size(X_ALL,1)==3) then!3D tetrahedra
+            !adjust to match the 2D case once that one works properly
+            do ele = 1, totele
+                !We check the 4 triangles that form a tet
+                Bad_found = Check_element(X_ALL, x_ndgln, (ele-1)*X_nloc, 1, 2, 3, MxAngl, Quality_list(ele), 4)
+                if (Bad_found) then
+                    Quality_list(k)%bad_ele = ele
+                    k = k + 1
+                else
+                    Bad_found = Check_element(X_ALL, x_ndgln, (ele-1)*X_nloc, 1, 2, 4, MxAngl, Quality_list(ele), 3)
+                    if (Bad_found) then
+                        Quality_list(k)%bad_ele = ele
+                        k = k + 1
+                    else
+                        Bad_found = Check_element(X_ALL, x_ndgln, (ele-1)*X_nloc, 1, 4, 3, MxAngl, Quality_list(ele), 2)
+                        if (Bad_found) then
+                            Quality_list(k)%bad_ele = ele
+                            k = k + 1
+                        else
+                            Bad_found = Check_element(X_ALL, x_ndgln, (ele-1)*X_nloc, 4, 2, 3, MxAngl, Quality_list(ele), 1)
+                            if (Bad_found) then
+                                Quality_list(k)%bad_ele = ele
+                                k = k + 1
+                            end if
+                        end if
+                    end if
+                end if
+            end do
+        end if
+
+        if (present(number_bad)) then
+            number_bad = k-1 ! pass for the diagnostic table
+        else
+            if (float(k-1)/totele > 0.01) then ! if bad elements found, let the user know
+                ewrite(0,'(A,F6.2,A,G7.2,A,I3,A)') 'Bad Element Fix WARNING:', (float(k-1)/totele)*100., '% of the elements, (',  k  ,') are bad elements, with an angle larger than ', int(MaxAngle), ' degrees. Artificial permeability anisotropy introduced, results may not be reliable.'
+            end if
+        end if
+            contains
+
+logical function Check_element(X_ALL, x_ndgln, ele_Pos, Pos1, Pos2, Pos3, MaxAngle, Quality_list, Pos4)
+    !Checks if an angle is below a threshold and stores the information to
+    implicit none
+    real, dimension(:,:), intent(in) :: X_ALL
+    integer, intent(in) :: ele_Pos, Pos1, Pos2, Pos3
+    integer, optional :: Pos4
+    real, intent(in) :: MaxAngle
+    integer, dimension(:), intent(in) :: x_ndgln
+    type(bad_elements), intent(inout) :: Quality_list
+    !Local variables
+    real, dimension(size(X_ALL,1)) :: X1, X2, X3, X4
+    real, dimension(3) :: alpha, length
+    real, dimension(3) :: normal ! normal vector of edge opposite largest angle
+    !Definition of Pi
+    real, parameter :: pi = acos(0.0) * 2.0
+
+    ! initialise normal
+    normal(:) = 0
+
+    Check_element = .false.
+    !Define the vertexes
+    X1 = X_ALL(:, x_ndgln(ele_Pos+Pos1))
+    X2 = X_ALL(:, x_ndgln(ele_Pos+Pos2))
+    X3 = X_ALL(:, x_ndgln(ele_Pos+Pos3))
+
+    !Define the 4th vertex if 3D to calculate normal
+    if(size(X_ALL,1)==3) then
+        X4 = X_ALL(:, x_ndgln(ele_Pos+Pos4))
+    end if
+
+    !Calculate the length of the edges
+    length(1) = sqrt(dot_product(X1(:)-X3(:), X1(:)-X3(:)))
+    length(2) = sqrt(dot_product(X1(:)-X2(:), X1(:)-X2(:)))
+    length(3) = sqrt(dot_product(X2(:)-X3(:), X2(:)-X3(:)))
+
+    !Determine the angle between each edge
+    alpha(1) = acos((length(3)**2+length(2)**2-length(1)**2)/(2. *length(3)*length(2)))
+    alpha(2) = acos((length(1)**2+length(3)**2-length(2)**2)/(2. *length(1)*length(3)))
+    alpha(3) = pi - alpha(1)-alpha(2)
+
+    !Check angles
+    if (alpha(1)>=MaxAngle) then
+        !Store angle so later the over-relaxation can depend on this
+        Quality_list%angle = alpha(1) * 180 / pi
+!        perp_height = (length(1)/2) / (tan(alpha(1)/2))
+!        Quality_list%perp_height = perp_height
+!        Quality_list%base = length(1)
+
+        if (bad_element_flag) then
+            ! calculate normal. For 3D its the cross product, 2D will be midpoint of edge opp largest angle and angle node
+            if(size(X_ALL,1)==3) then
+                normal = cross_product(X3-X1,X4-X3)
+            else
+                normal(1:2) = X2-(X3+X1)/2
+            end if
+            if (.not. allocated(Quality_list%rotmatrix)) allocate(Quality_list%rotmatrix(3,3))
+            call RotationMatrix(normal,Quality_list%rotmatrix)
+        end if
+        Check_element = .true.
+    else if (alpha(2)>= MaxAngle) then
+        !Store angle so later the over-relaxation can depend on this
+        Quality_list%angle = alpha(2) * 180 / pi
+!        perp_height = (length(2)/2) / (tan(alpha(2)/2))
+!        Quality_list%perp_height = perp_height
+!        Quality_list%base = length(2)
+
+        if (bad_element_flag) then
+            ! calculate normal. For 3D its the cross product, 2D will be midpoint of edge opp largest angle and angle node
+            if(size(X_ALL,1)==3) then
+                normal = cross_product(X2-X1,X4-X2)
+            else
+                normal(1:2) = X3-(X2+X1)/2
+            end if
+            if (.not. allocated(Quality_list%rotmatrix)) allocate(Quality_list%rotmatrix(3,3))
+            call RotationMatrix(normal,Quality_list%rotmatrix)
+        end if
+
+        Check_element = .true.
+    else if (alpha(3) >= MaxAngle) then
+        !Store angle so later the over-relaxation can depend on this
+        Quality_list%angle = alpha(3) * 180 / pi
+!        perp_height = (length(3)/2) / (tan(alpha(3)/2))
+!        Quality_list%perp_height = perp_height
+!        Quality_list%base = length(3)
+
+        if (bad_element_flag) then
+            ! calculate normal. For 3D its the cross product, 2D will be midpoint of edge opp largest angle and angle node
+            if(size(X_ALL,1)==3) then
+                normal = cross_product(X2-X3,X4-X2)
+            else
+                normal(1:2) = X3-(X2+X3)/2
+            end if
+            if (.not. allocated(Quality_list%rotmatrix)) allocate(Quality_list%rotmatrix(3,3))
+            call RotationMatrix(normal,Quality_list%rotmatrix)
+        end if
+        Check_element = .true.
+    end if
+
+end function Check_element
+
+    end subroutine CheckElementAngles
+
+subroutine RotationMatrix(a,R)
+
+    real, dimension(3), intent(in)    :: a ! normal vector of length opposite the largest angle of a 'bad' element
+    real, dimension(3)                :: an, bn, cx, u, v, w !an/bn normal vectors, cx cross product, u/v/w basis vectors
+    real                              :: dot
+    real, dimension(3,3)              :: T,G !T is the rotation matrix around z-axis !Change of basis matrix
+    real, dimension(3,3), intent(out) :: R !R = G*T*inv_G
+    integer :: d ! dimension of model 2 or 3
+
+    ! Normalise vector
+    an = a/NORM2(a)
+
+    ! normal vector of our cartesian aligned element
+    if (d ==3) then! 3D
+        bn = [ 0, 0, 1 ]
+    else ! 2D
+        bn = [ 0, 1, 0]
+    end if
+
+    ! calculate dot product and cross product
+    dot = dot_product(an,bn)
+    cx = cross_product(an,bn)
+
+    ! find the rotation matrix on cartesian axis around z axis
+    T(1,1) = dot
+    T(1,2) = -NORM2(cx)
+    T(1,3) = 0
+    T(2,1) = NORM2(cx)
+    T(2,2) = dot
+    T(2,3) = 0
+    T(3,1) = 0
+    T(3,2) = 0
+    T(3,3) = 1
+
+
+    if (all(cx(:)==0)) then ! if normal vectors are parallel then no need for new basis
+
+        R = T
+
+    else
+
+        ! new basis
+        u = an ! Normalised vector projection of bn onto an
+        v = (bn - dot*an)/NORM2(bn - dot*an) ! Normalised vector rejection of bn onto an
+        w = cx/NORM2(cx) ! Normalized cross product of an and bn creating the new orthonormal basis
+
+        ! Basis change matrix
+        G(:,1) = u
+        G(:,2) = v
+        G(:,3) = w
+
+        ! Calculate rotation matrix on the element basis
+        R = matmul(G,matmul(T, inverse(G)))
+
+        !write(*,'(A)') 'R='
+        !do i=1,size(R,1)
+        !  write(*,'(20G12.4)') R(i,:)
+        !end do
+    end if
+
+END subroutine RotationMatrix
+
+
+    subroutine read_nastran_file(filepath, node, edges)
+        !This subroutine reads a nastran file that contains the information defining the 1D path of a well
+        !the input relative filepath should include the file format, for example: well.bdf
+        implicit none
+        character( len = * ), intent(in) :: filepath
+        real, dimension(:,:), allocatable, intent(inout) :: node
+        integer, dimension(:,:), allocatable, intent(inout) :: edges
+        !Local variables
+        integer, dimension(:), allocatable:: conversor
+        integer :: i, k, j
+        character( len = option_path_len ):: cadena
+        integer :: Nnodes, Nedges
+        real, dimension(4) :: edge_line
+
+        !First we need to get the number of nodes and the number of edges to correctly allocate node and edges
+        call get_nodes_edges(Nnodes, Nedges)!; Nedges = Nnodes - 1!In 1d there is always one edge less than nodes
+        allocate(node(3, Nnodes), edges(2, Nedges), conversor(Nnodes))
+        !Open file
+        open(unit= 89, file=trim(filepath)//".bdf", status='old', action='read')
+        cadena = "--"
+        !skip header until reaching the nodes
+        do while (cadena(1:5)/="GRID")
+            read(89,'(A)') cadena
+        end do
+        i = 1!Read nodes
+        do while (cadena(1:5)=="GRID")
+            !Nastran files from trellis seem to have a bug, not leaving a space between coordinate 1 and 2
+            !we extract numbers by position as these are defined
+            read(cadena(25:32),*) node(1,i)
+            read(cadena(33:40),*) node(2,i)
+            read(cadena(41:49),*) node(3,i)
+            !Extract as well the number of the node
+            read(cadena(9:12),*) conversor(i)
+            read(89,'(A)') cadena; i = i + 1!read line and advance the counter
+        end do
+        !skip until reaching the edges
+        do while (cadena(1:5)/="CROD")
+            read(89,'(A)') cadena
+        end do
+        i = 1!Read edges
+        do while (cadena(1:5)=="CROD")
+            read(cadena(6:len(cadena)),*) edge_line
+            edges(:,i) = int(edge_line(3:4))!Only the last two columns contains the connection between nodes
+            read(89,'(A)') cadena; i = i + 1!read line and advance the counter
+        end do
+        close(89)
+
+        !Before leaving we normalize the edges list, making it to go from 1 to last edge instead of the numeration used
+         do j = 1, size(edges,1)
+             do i = 1, size(edges,2)
+                conversor_loop: do k = 1, size(conversor)
+                    if (edges(j,i) == conversor(k)) then
+                        edges(j,i) = k
+                        exit conversor_loop
+                    end if
+                end do conversor_loop
+             end do
+         end do
+        deallocate(conversor)
+    !Print well to gnuplot format
+!print*, "WELL IN GNUPLOT"
+!do j = 1, size(edges,1)
+!do i = 1, size(edges,2)
+!print *, node(:,edges(j,i))
+!end do
+!end do
+!print *, "-----------------------"
+!read*
+    contains
+        subroutine get_nodes_edges(Nnodes, Nedges)
+            !Get the number of nodes and edges that conform the well
+            implicit none
+            integer, intent(inout)::Nnodes, Nedges
+
+            Nnodes = 0; Nedges = 0
+            !Open file
+            open(unit= 89, file=trim(filepath)//".bdf", status='old', action='read')
+            cadena = "--"
+            do while (cadena(1:5)/="CROD")
+                read(89,'(A)') cadena
+                if (cadena(1:5)=="GRID")Nnodes = Nnodes + 1
+            end do
+            cadena = "--"
+            Nedges = 1!Because the previous loop finished with CROD
+            do while (cadena(1:5)/="PROD")
+                read(89,'(A)') cadena
+                if (cadena(1:5)=="CROD")Nedges = Nedges + 1
+            end do
+            close(89)
+
+        end subroutine get_nodes_edges
+    end subroutine read_nastran_file
 
 
 end module multi_tools

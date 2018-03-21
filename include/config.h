@@ -62,7 +62,7 @@
 /* #undef HAVE_LIBEXODUS */
 
 /* Define to 1 if you have the `exoIIv2c' library (-lexoIIv2c). */
-#define HAVE_LIBEXOIIV2C 1
+/* #undef HAVE_LIBEXOIIV2C */
 
 /* Define to 1 if you have the `m' library (-lm). */
 #define HAVE_LIBM 1

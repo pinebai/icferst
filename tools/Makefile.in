@@ -60,7 +60,7 @@ TEST_LAPLACIAN_VECTOR= ../bin/test_laplacian_vector
 VISUALISE_ELEMENTS= ../bin/visualise_elements
 GMSH2VTU= ../bin/gmsh2vtu
 TRIANGLE2VTU= ../bin/triangle2vtu
-#VTU2GMSH= ../bin/vtu2gmsh
+VTU2GMSH= ../bin/vtu2gmsh
 VTU2TRIANGLE= ../bin/vtu2triangle
 PETSC_READNSOLVE = ../bin/petsc_readnsolve
 TEST_PRESSURE_SOLVE = ../bin/test_pressure_solve
@@ -85,7 +85,7 @@ BINARIES = $(DRAWTIMNEW) $(MAKTIMUNIFORM) $(VTKDIAGNOSTIC)		\
   $(VERTICAL_INTEGRATION) $(EVMERGE) $(FLADAPT) $(CHECKMESH)		\
   $(PROJECT_VTU) $(PROBE_VTU) $(SUPERMESH_DIFFERENCE)			\
   $(DIFFERENTIATE_VTU) $(VTU_BINS) $(GMSH2VTU)	        		\
-  $(PROJECT_TO_CONTINUOUS) $(MESHCONV) 		                        \
+  $(PROJECT_TO_CONTINUOUS) $(MESHCONV) $(VTU2GMSH)		        \
   $(TEST_PRESSURE_SOLVE) $(UNIFIEDMESH) $(VTKPROJECTION) $(PERIODISE)	\
   $(STREAMFUNCTION_2D)							\
   $(TEST_LAPLACIAN) 
@@ -134,8 +134,8 @@ $(GMSH2VTU): gmsh2vtu.o gmsh2vtu_main.o lib/
 $(TRIANGLE2VTU): triangle2vtu.o triangle2vtu_main.o lib/
 	$(LINKER) -o $@ $(filter %.o,$^) -l$(FLUIDITY) $(LIBS)
 
-#$(VTU2GMSH): vtu2gmsh.o vtu2gmsh_main.o lib/
-#	$(LINKER) -o $@ $(filter %.o,$^) -l$(FLUIDITY) $(LIBS)
+$(VTU2GMSH): vtu2gmsh.o vtu2gmsh_main.o lib/
+	$(LINKER) -o $@ $(filter %.o,$^) -l$(FLUIDITY) $(LIBS)
 
 $(VTU2TRIANGLE): vtu2triangle.o vtu2triangle_main.o lib/
 	$(LINKER) -o $@ $(filter %.o,$^) -l$(FLUIDITY) $(LIBS)

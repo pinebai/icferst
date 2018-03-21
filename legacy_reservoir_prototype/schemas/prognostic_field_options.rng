@@ -190,64 +190,10 @@ requires a distinct name for the options dictionary.</a:documentation>
         <ref name="scalar_boundary_conditions"/>
       </zeroOrMore>
       <optional>
-        <!--
-               ## Choice of subgridscale model to apply to this field. 
-               ## Note that the selected parameterisation must be switched 
-               ## on for this material phase.
-               ##
-               ## At this time, do not switch on this option if you are using Mellor-Yamada.
-               (
-                  element subgridscale_parameterisation {
-                     attribute name { "Gent_McWilliams"}
-                  }|
-                  element subgridscale_parameterisation {
-                     attribute name { "GLS"}
-                  }|
-                  ## [UNDER DEVELOPMENT - DOES NOT WORK YET]
-                  ## Set the diffusivity to the eddy diffusivity calculated by the
-                  ## k-epsilon turbulence model. If using this, set the diffusivity field to
-                  ## diagnostic/algorithm(internal).
-                  element subgridscale_parameterisation {
-                     attribute name { "k-epsilon"},
-                     ## Option to set the Prandtl number (ratio of momentum diffusivity to field diffusivity)
-                     ##  for this field. Default = 1.0 if not specified.
-                     element Prandtl_number {
-                        input_choice_real
-                     }?
-                  }|
-                  element subgridscale_parameterisation {
-                     attribute name { "prescribed_diffusivity"}
-                  }
-               )?,
-               ## Buoyancy adjustment (vertical stabilization) schemes.
-               element buoyancy_adjustment {
-                  ## Vertical mixing by diffusion.
-                  ## Stabilises unstable stratifications through mixing by diffusion.
-                  ##
-                  ## Note this scheme currently only applies to tracer fields represented in discontinuous spaces.
-                  element by_vertical_diffusion{
-                     ## Scaling amplitude of the applied diffusion. 
-                     ## If left unspecified, the default value of 1.0 is applied.
-                     element amplitude  {
-                         real
-                     }?,
-                     ## Calculates the rate of change of buoyancy in the direction of gravity
-                     ## on the field projected to continuous space - i.e. the buoyancy field is first projected to continous space.
-                     ## Without this option, this calculation is performed directly on the discontinuous field.
-                     ##
-                     ## Note this only make a difference when the buoyancy field is represented in a discontinuous space, and in fact,
-                     ## makes no difference to the routines called when this field is represented in a continuous space.
-                     ##
-                     ## This is one approach to allow the scheme to account for differences with respect to neighbouring
-                     ## elements when buoyancy is a discontinuous field.
-                     element project_buoyancy_to_continuous_space {
-                         empty
-                     }?
-                  }?
-               }?,
-        -->
         <element name="tensor_field">
-          <a:documentation>Diffusivity for field</a:documentation>
+          <a:documentation>Diffusivity for field.
+
+Note that for the temperature field this is actually the thermal conductivity (in S.I. watts per meter-kelvin =&gt; W/(m·K) ).</a:documentation>
           <attribute name="name">
             <value>Diffusivity</value>
           </attribute>
@@ -380,11 +326,6 @@ requires a distinct name for the options dictionary.</a:documentation>
           <attribute name="rank">
             <value>0</value>
           </attribute>
-          <optional>
-            <element name="nphase">
-              <ref name="integer"/>
-            </element>
-          </optional>
           <element name="diagnostic">
             <ref name="tensor_python_diagnostic_algorithm"/>
             <ref name="diagnostic_tensor_field_no_adapt"/>
@@ -802,6 +743,12 @@ Recommended: For CG pressure =&gt; 100; For DG pressure =&gt; 15           </a:d
                 <empty/>
               </element>
             </optional>
+            <optional>
+              <element name="get_all_in_mass_matrix">
+                <a:documentation>Introduce in the pivit matrix the temporal terms</a:documentation>
+                <empty/>
+              </element>
+            </optional>
           </element>
         </optional>
         <element name="viscosity_scheme">
@@ -944,10 +891,6 @@ Int grad u.kappa.grad v dV</a:documentation>
             </element>
             <element name="nonlinear_flux">
               <a:documentation>Non-linear DG flux - if we have an oscillation use upwinding else use central scheme.</a:documentation>
-              <empty/>
-            </element>
-            <element name="DG_weighting">
-              <a:documentation>DG_weighting - The method to calculate the flux between CV not sharing element is also used for fluxes within an element</a:documentation>
               <empty/>
             </element>
             <element name="none">
@@ -1535,7 +1478,10 @@ coordinates, the nearest vertex will be selected.</a:documentation>
     </optional>
     <optional>
       <element name="CV_P_matrix">
-        <a:documentation>Use a Control Volume discretization to form the Pressure matrix</a:documentation>
+        <a:documentation>Use a Control Volume discretization to form the Pressure matrix.
+If NOT using Pressure inlet boundary conditions, it is recommended to disable 
+CV_press_homogenisation in the numerical_methods section.
+At present Mass lumping is imposed always. Moreover P1DGP1(CV) is automatically converted into P0DGP1(CV)</a:documentation>
         <empty/>
       </element>
     </optional>
@@ -1748,6 +1694,12 @@ want this.</a:documentation>
           <element name="type">
             <attribute name="name">
               <value>freesurface</value>
+            </attribute>
+            <ref name="input_choice_real"/>
+          </element>
+          <element name="type">
+            <attribute name="name">
+              <value>top</value>
             </attribute>
             <ref name="input_choice_real"/>
           </element>
@@ -2627,7 +2579,9 @@ field itself).</a:documentation>
           <a:documentation>Implicit/explicit control (TTHETA)
  =0.  -- explicit
  =0.5 -- Crank-Nicolson
- =1.  -- implicit</a:documentation>
+ =1.  -- implicit
+
+=-1. -- Automatic</a:documentation>
           <ref name="real"/>
         </element>
         <element name="control_volumes">

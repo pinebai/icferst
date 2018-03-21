@@ -60,16 +60,13 @@ vanish on the element boundaries, and
 trace defines an element that is only defined on faces
 and is undefined on the element interior (used for 
 enforcing continuity by Lagrange multipliers).</a:documentation>
-                <!--                 "lagrangian" | "bubble" | "trace" -->
-                <value>lagrangian</value>
+                <choice>
+                  <!--                 "lagrangian" | "bubble" | "trace" -->
+                  <value>lagrangian</value>
+                  <value>bubble</value>
+                </choice>
               </element>
             </element>
-            <optional>
-              <element name="Porous_media">
-                <a:documentation>Activate for porous media. It allows the use of lagrangian shape functions for porous media flow. Velocity only.</a:documentation>
-                <ref name="comment"/>
-              </element>
-            </optional>
           </element>
         </optional>
         <optional>
@@ -386,17 +383,17 @@ Default is 1e-3.</a:documentation>
       </element>
       <element name="mesh">
         <attribute name="name">
-          <value>VelocityMesh</value>
+          <data type="string" datatypeLibrary=""/>
         </attribute>
       </element>
+    </choice>
+  </define>
+  <!-- Same choices, but with P0DG offered first -->
+  <define name="subcv_mesh_choice">
+    <choice>
       <element name="mesh">
         <attribute name="name">
-          <value>PressureMesh</value>
-        </attribute>
-      </element>
-      <element name="mesh">
-        <attribute name="name">
-          <value>CoordinateMesh</value>
+          <value>PressureMesh_Discontinuous</value>
         </attribute>
       </element>
       <element name="mesh">

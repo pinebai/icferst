@@ -19,20 +19,18 @@ linear_solver_options_asym =
       ),
       ## Preconditioner to be used in combination with the iterative method.
       (
+         pchypre_options|
+         pcgamg_options|
          pcsor_options|
          pceisenstat_options|
          pcilu_options|
+         pcicc_options|
          pclu_options|
          pcmg_options|
-         pcprometheus_options|
-         pchypre_options|
-         pcbjacobi_options|
-         pcasm_options|
-         pcgamg_options|
-         pchypre_options|
          pcbjacobi_options|
          pcpbjacobi_options|
          pcasm_options|
+         pcksp_options|
          pcother_options
       ),
       generic_solver_options
@@ -53,14 +51,14 @@ linear_solver_options_sym =
       ),
       ## Preconditioner to be used in combination with the iterative method.
       (
+         pchypre_options|
+         pcgamg_options|
          pcsor_options|
          pceisenstat_options|
          pcilu_options|
          pcicc_options|
          pclu_options|
          pcmg_options|
-         pcgamg_options|
-         pchypre_options|
          pcbjacobi_options|
          pcpbjacobi_options|
          pcasm_options|
@@ -85,7 +83,8 @@ kspgmres_options =
          attribute name { "gmres" },
          ## Restart value for gmres iteration
          ## Higher values give better convergence but require more memory.
-         ## Suggested value: 30
+         ## Suggested value: 0;
+         ## Suggested value if having problems with the solver: 30.
          element restart {
             integer
          }
@@ -409,7 +408,7 @@ pcgamg_options =
             ## 
             ## Negative values implement stronger smoothers and the value used is the absolute
             ##
-            ## Default : -0.1
+            ## Default : 0.1
             element GAMG_threshold {real}?
          )
         }
@@ -425,7 +424,7 @@ generic_solver_options =
       ## Relative error
       ##
       ## The solver finishes if the preconditioned error becomes smaller than the original preconditioned error times this value.
-      ## Suggested value: 1.0e-7
+      ## Suggested value: 1.0e-10
       element relative_error {
          real
       },
@@ -453,29 +452,15 @@ generic_solver_options =
          empty
       }?,
       (
+         ## Ignore all solver failures. This is a dangerous option
+         ## that, however, should be used for the PhaseVolumeFraction for Porous Media.
+         element ignore_all_solver_failures {
+            empty
+         }|
          ## Solver failures are always treated as fatal errors. The
          ## model stops at the end of the time step in order to allow
          ## for the latest output to be written.
          element never_ignore_solver_failures {
-            empty
-         }|
-         ## Allow for an initial period in which solver failures
-         ## caused by non-convergence in the maximum number of
-         ## iterations are ignored.
-         element ignore_non_convergence_during_spin_up {
-            ## As long as current_time < spin_up_time, solver failures
-            ## due to non-convergence in the maximum number of
-            ## iterations are ignored. This might be used for spinning
-            ## up the model. As there is no guarantee we're actually
-            ## solving the flow equations to any accuracy, the results
-            ## in this period should not be trusted.
-            element spin_up_time {
-               real
-            }
-         }|
-         ## Ignore all solver failures. This is a dangerous option
-         ## that should only be used in exceptional cases.
-         element ignore_all_solver_failures {
             empty
          }
       ),
@@ -532,6 +517,11 @@ generic_solver_options =
             element true_residual {
                empty
             }?,
+             ## Same as true_residual option plus also show the 
+             ## min/max singular values (eigenvalues).
+            element singular_values {
+               empty
+            }?,
             ## Draws a graph over the convergence of the preconditioned residual
             ## during the solve. This option only works for systems where PETSc
             ## has been linked with the X library.
@@ -550,7 +540,7 @@ generic_solver_options =
             ## Writes out the approximate solution to a vtu each iteration.
             ## <b>This may create a large number of vtus!</b>
             element iteration_vtus {
-               empty
+                empty
             }?
          },
          ## Dump the matrix, rhs and solution vector in the PETSc matrixdump format

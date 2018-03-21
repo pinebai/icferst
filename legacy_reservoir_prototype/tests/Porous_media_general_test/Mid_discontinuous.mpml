@@ -3,6 +3,9 @@
   <simulation_name>
     <string_value lines="1">mid_discontinuous</string_value>
   </simulation_name>
+  <simulation_type>
+    <porous_media/>
+  </simulation_type>
   <geometry>
     <dimension>
       <integer_value rank="0">2</integer_value>
@@ -20,12 +23,11 @@
         <mesh name="CoordinateMesh"/>
         <mesh_shape>
           <polynomial_degree>
-            <integer_value rank="0">2</integer_value>
+            <integer_value rank="0">1</integer_value>
           </polynomial_degree>
           <element_type>
             <string_value>lagrangian</string_value>
           </element_type>
-          <Porous_media/>
         </mesh_shape>
         <mesh_continuity>
           <string_value>discontinuous</string_value>
@@ -40,44 +42,6 @@
         <mesh name="CoordinateMesh"/>
         <mesh_shape>
           <polynomial_degree>
-            <integer_value rank="0">1</integer_value>
-          </polynomial_degree>
-          <element_type>
-            <string_value>lagrangian</string_value>
-          </element_type>
-        </mesh_shape>
-        <mesh_continuity>
-          <string_value>discontinuous</string_value>
-        </mesh_continuity>
-        <stat>
-          <exclude_from_stat/>
-        </stat>
-      </from_mesh>
-    </mesh>
-    <mesh name="P0DG">
-      <from_mesh>
-        <mesh name="CoordinateMesh"/>
-        <mesh_shape>
-          <polynomial_degree>
-            <integer_value rank="0">0</integer_value>
-          </polynomial_degree>
-          <element_type>
-            <string_value>lagrangian</string_value>
-          </element_type>
-        </mesh_shape>
-        <mesh_continuity>
-          <string_value>discontinuous</string_value>
-        </mesh_continuity>
-        <stat>
-          <exclude_from_stat/>
-        </stat>
-      </from_mesh>
-    </mesh>
-    <mesh name="VelocityMesh_Continuous">
-      <from_mesh>
-        <mesh name="CoordinateMesh"/>
-        <mesh_shape>
-          <polynomial_degree>
             <integer_value rank="0">2</integer_value>
           </polynomial_degree>
           <element_type>
@@ -86,44 +50,6 @@
         </mesh_shape>
         <mesh_continuity>
           <string_value>continuous</string_value>
-        </mesh_continuity>
-        <stat>
-          <exclude_from_stat/>
-        </stat>
-      </from_mesh>
-    </mesh>
-    <mesh name="PressureMesh_Continuous">
-      <from_mesh>
-        <mesh name="CoordinateMesh"/>
-        <mesh_shape>
-          <polynomial_degree>
-            <integer_value rank="0">1</integer_value>
-          </polynomial_degree>
-          <element_type>
-            <string_value>lagrangian</string_value>
-          </element_type>
-        </mesh_shape>
-        <mesh_continuity>
-          <string_value>continuous</string_value>
-        </mesh_continuity>
-        <stat>
-          <exclude_from_stat/>
-        </stat>
-      </from_mesh>
-    </mesh>
-    <mesh name="PressureMesh_Discontinuous">
-      <from_mesh>
-        <mesh name="CoordinateMesh"/>
-        <mesh_shape>
-          <polynomial_degree>
-            <integer_value rank="0">1</integer_value>
-          </polynomial_degree>
-          <element_type>
-            <string_value>lagrangian</string_value>
-          </element_type>
-        </mesh_shape>
-        <mesh_continuity>
-          <string_value>discontinuous</string_value>
         </mesh_continuity>
         <stat>
           <exclude_from_stat/>
@@ -142,10 +68,12 @@
     </dump_format>
     <dump_period_in_timesteps>
       <constant>
-        <integer_value rank="0">10</integer_value>
+        <integer_value rank="0">1</integer_value>
       </constant>
     </dump_period_in_timesteps>
+    <PropertiesFromFile>substances_properties</PropertiesFromFile>
     <output_mesh name="PressureMesh"/>
+    <output_darcy_vel/>
     <stat/>
   </io>
   <timestepping>
@@ -162,22 +90,25 @@
       <integer_value rank="0">50</integer_value>
       <Fixed_Point_Iteration>
         <real_value rank="0">5e-2</real_value>
-        <Backtracking_factor>
-          <real_value rank="0">-0.15</real_value>
-        </Backtracking_factor>
-        <Inifinite_norm_tol>
+        <Infinite_norm_tol>
           <real_value rank="0">0.02</real_value>
-        </Inifinite_norm_tol>
+        </Infinite_norm_tol>
+        <Backtracking_factor>
+          <real_value rank="0">-10</real_value>
+        </Backtracking_factor>
+        <Vanishing_relaxation>
+          <real_value rank="0">-1e2</real_value>
+        </Vanishing_relaxation>
+        <adaptive_timestep_nonlinear>
+          <integer_value rank="0">3</integer_value>
+          <PID_controller>
+            <Aim_num_FPI>
+              <integer_value rank="0">6</integer_value>
+            </Aim_num_FPI>
+          </PID_controller>
+        </adaptive_timestep_nonlinear>
       </Fixed_Point_Iteration>
     </nonlinear_iterations>
-    <adaptive_timestep>
-      <requested_cfl>
-        <real_value rank="0">3</real_value>
-      </requested_cfl>
-      <courant_number name="CFLNumber">
-        <mesh name="VelocityMesh"/>
-      </courant_number>
-    </adaptive_timestep>
   </timestepping>
   <physical_parameters>
     <gravity>
@@ -219,10 +150,15 @@
         <spatial_discretisation>
           <continuous_galerkin/>
         </spatial_discretisation>
+        <CV_P_matrix/>
         <solver>
-          <iterative_method name="preonly"/>
-          <preconditioner name="lu">
-            <factorization_package name="petsc"/>
+          <iterative_method name="gmres">
+            <restart>
+              <integer_value rank="0">30</integer_value>
+            </restart>
+          </iterative_method>
+          <preconditioner name="hypre">
+            <hypre_type name="boomeramg"/>
           </preconditioner>
           <relative_error>
             <real_value rank="0">1e-10</real_value>
@@ -265,9 +201,7 @@
         <steady_state>
           <include_in_steady_state/>
         </steady_state>
-        <galerkin_projection>
-          <discontinuous/>
-        </galerkin_projection>
+        <consistent_interpolation/>
       </prognostic>
     </scalar_field>
     <scalar_field name="Density" rank="0">
@@ -336,9 +270,13 @@
           </relaxation>
         </temporal_discretisation>
         <solver>
-          <iterative_method name="preonly"/>
-          <preconditioner name="lu">
-            <factorization_package name="petsc"/>
+          <iterative_method name="gmres">
+            <restart>
+              <integer_value rank="0">30</integer_value>
+            </restart>
+          </iterative_method>
+          <preconditioner name="hypre">
+            <hypre_type name="boomeramg"/>
           </preconditioner>
           <relative_error>
             <real_value rank="0">1e-10</real_value>
@@ -347,7 +285,7 @@
             <real_value rank="0">1e-15</real_value>
           </absolute_error>
           <max_iterations>
-            <integer_value rank="0">250</integer_value>
+            <integer_value rank="0">500</integer_value>
           </max_iterations>
           <never_ignore_solver_failures/>
           <diagnostics>
@@ -492,7 +430,7 @@
             <real_value rank="0">1e-15</real_value>
           </absolute_error>
           <max_iterations>
-            <integer_value rank="0">300</integer_value>
+            <integer_value rank="0">500</integer_value>
           </max_iterations>
           <never_ignore_solver_failures/>
           <diagnostics>
@@ -534,39 +472,6 @@
         <detectors>
           <include_in_detectors/>
         </detectors>
-        <CVgalerkin_interpolation/>
-      </prognostic>
-    </scalar_field>
-    <scalar_field name="GalerkinProjection" rank="0">
-      <diagnostic>
-        <algorithm legacy="true" name="Internal" material_phase_support="multiple"/>
-        <source_field_name>PhaseVolumeFraction</source_field_name>
-        <mesh name="PressureMesh_Continuous"/>
-        <solver>
-          <iterative_method name="cg"/>
-          <preconditioner name="sor"/>
-          <relative_error>
-            <real_value rank="0">1e-10</real_value>
-          </relative_error>
-          <max_iterations>
-            <integer_value rank="0">200</integer_value>
-          </max_iterations>
-          <never_ignore_solver_failures/>
-          <diagnostics>
-            <monitors/>
-          </diagnostics>
-        </solver>
-        <output/>
-        <stat/>
-        <convergence>
-          <include_in_convergence/>
-        </convergence>
-        <detectors>
-          <include_in_detectors/>
-        </detectors>
-        <steady_state>
-          <include_in_steady_state/>
-        </steady_state>
         <adaptivity_options>
           <absolute_measure>
             <scalar_field name="InterpolationErrorBound" rank="0">
@@ -585,80 +490,76 @@
             </scalar_field>
           </absolute_measure>
         </adaptivity_options>
-      </diagnostic>
+        <galerkin_projection>
+          <continuous>
+            <bounded name="Diffuse">
+              <boundedness_iterations>
+                <integer_value rank="0">10</integer_value>
+              </boundedness_iterations>
+            </bounded>
+            <solver>
+              <iterative_method name="gmres">
+                <restart>
+                  <integer_value rank="0">30</integer_value>
+                </restart>
+              </iterative_method>
+              <preconditioner name="hypre">
+                <hypre_type name="boomeramg"/>
+              </preconditioner>
+              <relative_error>
+                <real_value rank="0">1e-10</real_value>
+              </relative_error>
+              <absolute_error>
+                <real_value rank="0">1e-15</real_value>
+              </absolute_error>
+              <max_iterations>
+                <integer_value rank="0">500</integer_value>
+              </max_iterations>
+              <never_ignore_solver_failures/>
+              <diagnostics>
+                <monitors/>
+              </diagnostics>
+            </solver>
+          </continuous>
+        </galerkin_projection>
+      </prognostic>
     </scalar_field>
     <multiphase_properties>
       <Relperm_Corey>
-        <relperm_max>
-          <scalar_field name="relperm_max">
-            <prescribed>
-              <mesh name="P0DG"/>
-              <value name="inner">
-                <region_ids>
-                  <integer_value shape="1" rank="1">25</integer_value>
-                </region_ids>
-                <constant>
-                  <real_value rank="0">0.6</real_value>
-                </constant>
-              </value>
-              <output/>
-              <stat/>
-              <detectors>
-                <exclude_from_detectors/>
-              </detectors>
-            </prescribed>
-          </scalar_field>
-        </relperm_max>
-        <relperm_exponent>
-          <scalar_field name="relperm_exponent">
-            <prescribed>
-              <mesh name="P0DG"/>
-              <value name="inner">
-                <region_ids>
-                  <integer_value shape="1" rank="1">25</integer_value>
-                </region_ids>
-                <constant>
-                  <real_value rank="0">2</real_value>
-                </constant>
-              </value>
-              <value name="outer">
-                <region_ids>
-                  <integer_value shape="1" rank="1">24</integer_value>
-                </region_ids>
-                <constant>
-                  <real_value rank="0">1</real_value>
-                </constant>
-              </value>
-              <output/>
-              <stat/>
-              <detectors>
-                <exclude_from_detectors/>
-              </detectors>
-            </prescribed>
-          </scalar_field>
-        </relperm_exponent>
+        <scalar_field name="relperm_max">
+          <prescribed>
+            <mesh name="P0DG"/>
+            <value name="WholeMesh">
+              <csv_file/>
+            </value>
+            <output/>
+            <stat/>
+            <detectors>
+              <exclude_from_detectors/>
+            </detectors>
+          </prescribed>
+        </scalar_field>
+        <scalar_field name="relperm_exponent">
+          <prescribed>
+            <mesh name="P0DG"/>
+            <value name="WholeMesh">
+              <csv_file/>
+            </value>
+            <output/>
+            <stat/>
+            <detectors>
+              <exclude_from_detectors/>
+            </detectors>
+          </prescribed>
+        </scalar_field>
       </Relperm_Corey>
       <capillary_pressure>
-        <Diffusive_cap_only/>
         <type_Brooks_Corey>
           <scalar_field name="C">
             <prescribed>
               <mesh name="P0DG"/>
-              <value name="inner">
-                <region_ids>
-                  <integer_value shape="1" rank="1">25</integer_value>
-                </region_ids>
-                <constant>
-                  <real_value rank="0">1e-3</real_value>
-                </constant>
-              </value>
-              <value name="outer">
-                <region_ids>
-                  <integer_value shape="1" rank="1">24</integer_value>
-                </region_ids>
-                <constant>
-                  <real_value rank="0">1e-2</real_value>
-                </constant>
+              <value name="WholeMesh">
+                <csv_file/>
               </value>
               <output/>
               <stat/>
@@ -670,21 +571,8 @@
           <scalar_field name="a">
             <prescribed>
               <mesh name="P0DG"/>
-              <value name="inner">
-                <region_ids>
-                  <integer_value shape="1" rank="1">25</integer_value>
-                </region_ids>
-                <constant>
-                  <real_value rank="0">0.5</real_value>
-                </constant>
-              </value>
-              <value name="outer">
-                <region_ids>
-                  <integer_value shape="1" rank="1">24</integer_value>
-                </region_ids>
-                <constant>
-                  <real_value rank="0">1</real_value>
-                </constant>
+              <value name="WholeMesh">
+                <csv_file/>
               </value>
               <output/>
               <stat/>
@@ -699,21 +587,8 @@
         <scalar_field name="value">
           <prescribed>
             <mesh name="P0DG"/>
-            <value name="inner">
-              <region_ids>
-                <integer_value shape="1" rank="1">25</integer_value>
-              </region_ids>
-              <constant>
-                <real_value rank="0">0.1</real_value>
-              </constant>
-            </value>
-            <value name="outer">
-              <region_ids>
-                <integer_value shape="1" rank="1">24</integer_value>
-              </region_ids>
-              <constant>
-                <real_value rank="0">0.2</real_value>
-              </constant>
+            <value name="WholeMesh">
+              <csv_file/>
             </value>
             <output/>
             <stat/>
@@ -803,9 +678,13 @@
           </relaxation>
         </temporal_discretisation>
         <solver>
-          <iterative_method name="preonly"/>
-          <preconditioner name="lu">
-            <factorization_package name="petsc"/>
+          <iterative_method name="gmres">
+            <restart>
+              <integer_value rank="0">30</integer_value>
+            </restart>
+          </iterative_method>
+          <preconditioner name="hypre">
+            <hypre_type name="boomeramg"/>
           </preconditioner>
           <relative_error>
             <real_value rank="0">1e-10</real_value>
@@ -814,7 +693,7 @@
             <real_value rank="0">1e-15</real_value>
           </absolute_error>
           <max_iterations>
-            <integer_value rank="0">250</integer_value>
+            <integer_value rank="0">500</integer_value>
           </max_iterations>
           <never_ignore_solver_failures/>
           <diagnostics>
@@ -944,9 +823,13 @@
           </theta>
         </temporal_discretisation>
         <solver>
-          <iterative_method name="preonly"/>
-          <preconditioner name="lu">
-            <factorization_package name="petsc"/>
+          <iterative_method name="gmres">
+            <restart>
+              <integer_value rank="0">30</integer_value>
+            </restart>
+          </iterative_method>
+          <preconditioner name="hypre">
+            <hypre_type name="boomeramg"/>
           </preconditioner>
           <relative_error>
             <real_value rank="0">1e-10</real_value>
@@ -955,7 +838,7 @@
             <real_value rank="0">1e-15</real_value>
           </absolute_error>
           <max_iterations>
-            <integer_value rank="0">300</integer_value>
+            <integer_value rank="0">500</integer_value>
           </max_iterations>
           <never_ignore_solver_failures/>
           <diagnostics>
@@ -997,87 +880,75 @@
         <detectors>
           <include_in_detectors/>
         </detectors>
-        <CVgalerkin_interpolation/>
+        <galerkin_projection>
+          <continuous>
+            <bounded name="Diffuse">
+              <boundedness_iterations>
+                <integer_value rank="0">10</integer_value>
+              </boundedness_iterations>
+            </bounded>
+            <solver>
+              <iterative_method name="gmres">
+                <restart>
+                  <integer_value rank="0">30</integer_value>
+                </restart>
+              </iterative_method>
+              <preconditioner name="hypre">
+                <hypre_type name="boomeramg"/>
+              </preconditioner>
+              <relative_error>
+                <real_value rank="0">1e-10</real_value>
+              </relative_error>
+              <absolute_error>
+                <real_value rank="0">1e-15</real_value>
+              </absolute_error>
+              <max_iterations>
+                <integer_value rank="0">500</integer_value>
+              </max_iterations>
+              <never_ignore_solver_failures/>
+              <diagnostics>
+                <monitors/>
+              </diagnostics>
+            </solver>
+          </continuous>
+        </galerkin_projection>
       </prognostic>
     </scalar_field>
     <multiphase_properties>
       <Relperm_Corey>
-        <relperm_max>
-          <scalar_field name="relperm_max">
-            <prescribed>
-              <mesh name="P0DG"/>
-              <value name="inner">
-                <region_ids>
-                  <integer_value shape="1" rank="1">25</integer_value>
-                </region_ids>
-                <constant>
-                  <real_value rank="0">1</real_value>
-                </constant>
-              </value>
-              <value name="outer">
-                <region_ids>
-                  <integer_value shape="1" rank="1">24</integer_value>
-                </region_ids>
-                <constant>
-                  <real_value rank="0">0.6</real_value>
-                </constant>
-              </value>
-              <output/>
-              <stat/>
-              <detectors>
-                <exclude_from_detectors/>
-              </detectors>
-            </prescribed>
-          </scalar_field>
-        </relperm_max>
-        <relperm_exponent>
-          <scalar_field name="relperm_exponent">
-            <prescribed>
-              <mesh name="P0DG"/>
-              <value name="inner">
-                <region_ids>
-                  <integer_value shape="1" rank="1">25</integer_value>
-                </region_ids>
-                <constant>
-                  <real_value rank="0">2</real_value>
-                </constant>
-              </value>
-              <value name="outer">
-                <region_ids>
-                  <integer_value shape="1" rank="1">24</integer_value>
-                </region_ids>
-                <constant>
-                  <real_value rank="0">1</real_value>
-                </constant>
-              </value>
-              <output/>
-              <stat/>
-              <detectors>
-                <exclude_from_detectors/>
-              </detectors>
-            </prescribed>
-          </scalar_field>
-        </relperm_exponent>
+        <scalar_field name="relperm_max">
+          <prescribed>
+            <mesh name="P0DG"/>
+            <value name="WholeMesh">
+              <csv_file/>
+            </value>
+            <output/>
+            <stat/>
+            <detectors>
+              <exclude_from_detectors/>
+            </detectors>
+          </prescribed>
+        </scalar_field>
+        <scalar_field name="relperm_exponent">
+          <prescribed>
+            <mesh name="P0DG"/>
+            <value name="WholeMesh">
+              <csv_file/>
+            </value>
+            <output/>
+            <stat/>
+            <detectors>
+              <exclude_from_detectors/>
+            </detectors>
+          </prescribed>
+        </scalar_field>
       </Relperm_Corey>
       <immobile_fraction>
         <scalar_field name="value">
           <prescribed>
             <mesh name="P0DG"/>
-            <value name="inner">
-              <region_ids>
-                <integer_value shape="1" rank="1">25</integer_value>
-              </region_ids>
-              <constant>
-                <real_value rank="0">0.1</real_value>
-              </constant>
-            </value>
-            <value name="outer">
-              <region_ids>
-                <integer_value shape="1" rank="1">24</integer_value>
-              </region_ids>
-              <constant>
-                <real_value rank="0">0.2</real_value>
-              </constant>
+            <value name="WholeMesh">
+              <csv_file/>
             </value>
             <output/>
             <stat/>
@@ -1092,7 +963,7 @@
   <mesh_adaptivity>
     <hr_adaptivity>
       <period_in_timesteps>
-        <integer_value rank="0">5</integer_value>
+        <integer_value rank="0">500000</integer_value>
       </period_in_timesteps>
       <maximum_number_of_nodes>
         <integer_value rank="0">500</integer_value>
@@ -1122,21 +993,8 @@
     <scalar_field name="Porosity">
       <prescribed>
         <mesh name="P0DG"/>
-        <value name="inner">
-          <region_ids>
-            <integer_value shape="1" rank="1">25</integer_value>
-          </region_ids>
-          <constant>
-            <real_value rank="0">0.3</real_value>
-          </constant>
-        </value>
-        <value name="outer">
-          <region_ids>
-            <integer_value shape="1" rank="1">24</integer_value>
-          </region_ids>
-          <constant>
-            <real_value rank="0">0.2</real_value>
-          </constant>
+        <value name="WholeMesh">
+          <csv_file/>
         </value>
         <output/>
         <stat/>
@@ -1148,25 +1006,10 @@
     <tensor_field name="Permeability">
       <prescribed>
         <mesh name="P0DG"/>
-        <value name="inner">
-          <region_ids>
-            <integer_value shape="1" rank="1">25</integer_value>
-          </region_ids>
-          <isotropic>
-            <constant>
-              <real_value rank="0">2</real_value>
-            </constant>
-          </isotropic>
-        </value>
-        <value name="outer">
-          <region_ids>
-            <integer_value shape="1" rank="1">24</integer_value>
-          </region_ids>
-          <anisotropic_symmetric>
-            <constant>
-              <real_value symmetric="true" dim2="dim" shape="2 2" dim1="dim" rank="2">1 0 0 0.5</real_value>
-            </constant>
-          </anisotropic_symmetric>
+        <value name="WholeMesh">
+          <anisotropic_asymmetric>
+            <csv_file/>
+          </anisotropic_asymmetric>
         </value>
         <output/>
       </prescribed>
