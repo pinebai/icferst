@@ -2038,7 +2038,7 @@ subroutine Adaptive_NonLinear(packed_state, reference_field, its,&
     call get_option( '/timestepping/nonlinear_iterations/Fixed_Point_Iteration/adaptive_timestep_nonlinear/PID_controller/Aim_num_FPI', &
         Aim_num_FPI, default = int(0.20 * NonLinearIteration) )
     call get_option( '/timestepping/nonlinear_iterations/Fixed_Point_Iteration/Test_mass_consv', &
-            calculate_mass_tol, default = 5d-3)
+            calculate_mass_tol, default = 1d-2)
     PID_controller = have_option( '/timestepping/nonlinear_iterations/Fixed_Point_Iteration/adaptive_timestep_nonlinear/PID_controller')
     !Retrieve current time and final time
     call get_option( '/timestepping/current_time', acctim )

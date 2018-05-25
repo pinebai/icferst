@@ -534,7 +534,7 @@ start =
                     ## Convergence criterion based on the 
                     ## conservation of mass for the Fixed Point Iteration solver
 	            ## 
-		    ## By default the tolerance is 5e-3
+		    ## By default the tolerance is 1e-2
                     element Test_mass_consv{real}?
                   ),
                   (

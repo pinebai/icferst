@@ -633,7 +633,7 @@ This imposes that the temperature has to be between bounds.</a:documentation>
                     <a:documentation>Convergence criterion based on the 
 conservation of mass for the Fixed Point Iteration solver
 
-By default the tolerance is 5e-3</a:documentation>
+By default the tolerance is 1e-2</a:documentation>
                     <ref name="real"/>
                   </element>
                 </optional>
